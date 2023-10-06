@@ -5,6 +5,13 @@ import java.util.List;
 import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Getter;
+import org.redisson.misc.RedisURI;
+import oshi.util.FileUtil;
+import redis.clients.jedis.util.JedisURIHelper;
+
+import javax.annotation.Nullable;
+import javax.naming.ConfigurationException;
+import java.net.URI;
 
 @Data
 public class Backplane {
@@ -47,6 +54,7 @@ public class Backplane {
   private boolean priorityQueue = false;
   private Queue[] queues = {};
   private String redisPassword;
+  private String redisCredentialFile;
   private int timeout = 10000;
   private String[] redisNodes = {};
   private int maxAttempts = 20;
@@ -56,4 +64,41 @@ public class Backplane {
   // These limited resources are shared across all workers.
   // An example would be a limited number of seats to a license server.
   private List<LimitedResource> resources = new ArrayList<>();
+
+  public String getRedisUri() {
+    // use environment override (useful for containerized deployment)
+    if (!Strings.isNullOrEmpty(System.getenv("REDIS_URI"))) {
+      return System.getenv("REDIS_URI");
+    }
+
+    // use configured value
+    return redisUri;
+  }
+
+  /**
+   * Look in several prioritized ways to get a Redis password:
+   * <ol>
+   *     <l><c>REDIS_PASSWORD</c> env var (Highest priority)</li>
+   *     <li>the password in the Redis URI (wherever that came from)</li>
+   *     <li>The `redisPassword` from config YAML </li>
+   *     <li>the `redisCredentialFile`.</li>
+   * </ol>
+   * @return The redis password, or <c>null</c> if unset.
+   */
+  public @Nullable String getRedisPassword() {
+    if (!Strings.isNullOrEmpty(System.getenv("REDIS_PASSWORD"))) {
+      return System.getenv("REDIS_PASSWORD");
+    }
+    URI redisProperUri = URI.create(getRedisUri());
+    if (!Strings.isNullOrEmpty(JedisURIHelper.getPassword(redisProperUri))) {
+      return JedisURIHelper.getPassword(redisProperUri);
+    }
+
+    if (!Strings.isNullOrEmpty(redisCredentialFile)) {
+      //Finally, get the password from the config file.
+      return FileUtil.getStringFromFile(redisCredentialFile);
+    }
+    
+    return Strings.emptyToNull(redisPassword);
+  }
 }
