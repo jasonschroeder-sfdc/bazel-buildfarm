@@ -118,6 +118,13 @@ maven.install(
                 ] + ["io.netty:netty-%s:4.1.108.Final" % module for module in IO_NETTY_MODULES] +
                 ["io.grpc:grpc-%s:1.62.2" % module for module in IO_GRPC_MODULES] + [
         # keep sorted
+        "io.opentelemetry:opentelemetry-api:1.38.0",
+        "io.opentelemetry:opentelemetry-context:1.38.0",
+        "io.opentelemetry:opentelemetry-exporter-logging:1.38.0",
+        "io.opentelemetry:opentelemetry-exporter-otlp:1.38.0",
+        "io.opentelemetry:opentelemetry-sdk:1.38.0",
+        "io.opentelemetry:opentelemetry-sdk-extension-autoconfigure:1.38.0",
+        "io.opentelemetry.semconv:opentelemetry-semconv:1.25.0-alpha",
         "io.prometheus:simpleclient:0.16.0",
         "io.prometheus:simpleclient_hotspot:0.16.0",
         "io.prometheus:simpleclient_httpserver:0.16.0",
