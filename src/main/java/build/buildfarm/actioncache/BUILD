@@ -12,6 +12,7 @@ java_library(
         "@maven//:com_google_protobuf_protobuf_java",
         "@maven//:io_grpc_grpc_api",
         "@maven//:io_grpc_grpc_core",
+        "@maven//:io_micrometer_micrometer_core",
         "@maven//:net_javacrumbs_future_converter_future_converter_java8_guava",
         "@remoteapis//build/bazel/remote/execution/v2:remote_execution_java_proto",
     ],

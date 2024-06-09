@@ -27,7 +27,7 @@ java_library(
         "@maven//:io_grpc_grpc_core",
         "@maven//:io_grpc_grpc_protobuf",
         "@maven//:io_grpc_grpc_stub",
-        "@maven//:io_prometheus_simpleclient",
+        "@maven//:io_micrometer_micrometer_core",
         "@maven//:net_javacrumbs_future_converter_future_converter_java8_guava",
         "@maven//:org_apache_commons_commons_pool2",
         "@maven//:org_projectlombok_lombok",
