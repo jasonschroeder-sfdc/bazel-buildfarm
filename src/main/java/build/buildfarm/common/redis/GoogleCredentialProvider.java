@@ -51,7 +51,7 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
   private volatile Exception lastException;
 
   public GoogleCredentialProvider() throws Exception {
-    this(Duration.ofMinutes(5), Duration.ofMinutes(60));
+    this(Duration.ofHours(1), Duration.ofHours(8));
   }
 
   public GoogleCredentialProvider(Duration refreshDuration, Duration lifetime) throws Exception {
