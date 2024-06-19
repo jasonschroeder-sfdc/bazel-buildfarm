@@ -87,6 +87,9 @@ maven.install(
     name = "buildfarm_maven",
     artifacts = [
         # keep sorted
+        "ch.qos.logback.contrib:logback-jackson:0.1.5",
+        "ch.qos.logback.contrib:logback-json-classic:0.1.5",
+        "ch.qos.logback:logback-classic:1.5.6",
         "com.amazonaws:aws-java-sdk-core",  # Version is specified via the BOM below
         "com.amazonaws:aws-java-sdk-s3",
         "com.amazonaws:aws-java-sdk-secretsmanager",
@@ -170,6 +173,7 @@ maven.install(
         "org.openjdk.jmh:jmh-core:1.37",
         "org.openjdk.jmh:jmh-generator-annprocess:1.37",
         "org.projectlombok:lombok:1.18.48",
+        "org.slf4j:jul-to-slf4j:2.0.13",
         "org.slf4j:slf4j-simple:2.0.20",
         "org.threeten:threetenbp:1.7.5",
         "org.xerial:sqlite-jdbc:3.53.4.0",

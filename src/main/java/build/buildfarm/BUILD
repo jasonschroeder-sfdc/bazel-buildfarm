@@ -5,9 +5,16 @@ package(
     default_visibility = ["//src:__subpackages__"],
 )
 
+LOGGING_RUNTIME_DEPS = [
+    "@buildfarm_maven//:ch_qos_logback_logback_classic",
+    "@buildfarm_maven//:ch_qos_logback_contrib_logback_json_classic",
+    "@buildfarm_maven//:ch_qos_logback_contrib_logback_jackson",
+    "@buildfarm_maven//:com_fasterxml_jackson_core_jackson_databind",
+]
+
 java_binary(
     name = "buildfarm-server",
-    data = [
+    classpath_resources = [
         "//examples:example_configs",
         "//examples:example_properties",
     ],
@@ -16,13 +23,12 @@ java_binary(
     visibility = ["//visibility:public"],
     runtime_deps = [
         "//src/main/java/build/buildfarm/server",
-        "@buildfarm_maven//:org_slf4j_slf4j_simple",
-    ],
+    ] + LOGGING_RUNTIME_DEPS,
 )
 
 java_binary(
     name = "buildfarm-shard-worker",
-    data = [
+    classpath_resources = [
         "//examples:example_configs",
         "//examples:example_properties",
     ],
@@ -31,5 +37,5 @@ java_binary(
     visibility = ["//visibility:public"],
     runtime_deps = [
         "//src/main/java/build/buildfarm/worker/shard",
-    ],
+    ] + LOGGING_RUNTIME_DEPS,
 )
