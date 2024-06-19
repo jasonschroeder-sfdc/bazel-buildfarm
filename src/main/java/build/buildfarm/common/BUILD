@@ -37,6 +37,7 @@ java_library(
         "@maven//:org_projectlombok_lombok",
         "@maven//:org_threeten_threetenbp",
         "@maven//:redis_clients_jedis",
+        "@maven//:org_slf4j_jul_to_slf4j",
         "@remoteapis//build/bazel/remote/execution/v2:remote_execution_java_proto",
     ],
 )
