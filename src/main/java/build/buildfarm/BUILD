@@ -4,9 +4,16 @@ package(
     default_visibility = ["//src:__subpackages__"],
 )
 
+LOGGING_RUNTIME_DEPS = [
+    "@maven//:ch_qos_logback_logback_classic",
+    "@maven//:ch_qos_logback_contrib_logback_json_classic",
+    "@maven//:ch_qos_logback_contrib_logback_jackson",
+    "@maven//:com_fasterxml_jackson_core_jackson_databind",
+]
+
 filegroup(
     name = "configs",
-    srcs = ["logging.properties"],
+    srcs = ["logback.xml"],
     visibility = ["//visibility:public"],
 )
 
@@ -20,8 +27,7 @@ java_binary(
     visibility = ["//visibility:public"],
     runtime_deps = [
         "//src/main/java/build/buildfarm/server",
-        "@maven//:org_slf4j_slf4j_simple",
-    ],
+    ] + LOGGING_RUNTIME_DEPS,
 )
 
 java_binary(
@@ -34,5 +40,5 @@ java_binary(
     visibility = ["//visibility:public"],
     runtime_deps = [
         "//src/main/java/build/buildfarm/worker/shard",
-    ],
+    ] + LOGGING_RUNTIME_DEPS,
 )
