@@ -29,6 +29,8 @@ import com.google.common.cache.CacheLoader.InvalidCacheLoadException;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import io.grpc.Status;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 
@@ -52,6 +54,7 @@ public class ShardActionCache implements ActionCache {
                     executor));
 
     actionResultCache = Caffeine.newBuilder().maximumSize(maxLocalCacheSize).buildAsync(loader);
+    CaffeineCacheMetrics.monitor(Metrics.globalRegistry, actionResultCache, "actionCache");
   }
 
   @Override
