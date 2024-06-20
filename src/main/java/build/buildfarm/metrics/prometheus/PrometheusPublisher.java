@@ -14,8 +14,10 @@
 
 package build.buildfarm.metrics.prometheus;
 
-import io.prometheus.client.exporter.HTTPServer;
-import io.prometheus.client.hotspot.DefaultExports;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.prometheusmetrics.PrometheusConfig;
+import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
+import io.prometheus.metrics.exporter.httpserver.HTTPServer;
 import java.io.IOException;
 import lombok.extern.java.Log;
 
@@ -24,16 +26,20 @@ public class PrometheusPublisher {
   private static HTTPServer server;
 
   public static void startHttpServer(int port) {
-    try {
-      if (port > 0) {
-        DefaultExports.initialize();
-        server = new HTTPServer(port);
+    if (port > 0) {
+      try {
+        PrometheusMeterRegistry prometheusRegistry =
+            new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        Metrics.globalRegistry.add(prometheusRegistry);
+        server =
+            HTTPServer.builder()
+                .port(port)
+                .registry(prometheusRegistry.getPrometheusRegistry())
+                .buildAndStart();
         log.info("Started Prometheus HTTP Server on port " + port);
-      } else {
-        log.info("Prometheus port is not configured. HTTP Server will not be started");
+      } catch (IOException e) {
+        log.severe("Could not start Prometheus HTTP Server on port " + port);
       }
-    } catch (IOException e) {
-      log.severe("Could not start Prometheus HTTP Server on port " + port);
     }
   }
 
