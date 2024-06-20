@@ -118,7 +118,5 @@ public class WorkerIndexer {
     results.totalKeys += totalKeys;
     results.removedKeys += removedKeys;
     results.removedHosts += removedHosts;
-    indexerHostsRemovedGauge.labels(node.toString()).set(removedHosts);
-    indexerKeysRemovedGauge.labels(node.toString()).set(removedKeys);
   }
 }
