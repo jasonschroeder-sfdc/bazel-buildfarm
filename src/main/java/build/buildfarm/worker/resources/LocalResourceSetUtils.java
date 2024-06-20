@@ -16,6 +16,8 @@ package build.buildfarm.worker.resources;
 
 import build.bazel.remote.execution.v2.Platform;
 import build.buildfarm.common.config.LimitedResource;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Metrics;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,13 +31,16 @@ import org.apache.commons.lang3.StringUtils;
  * @details The methods help with allocation / de-allocation of claims, as well as metrics printing.
  */
 public class LocalResourceSetUtils {
-  private static final LocalResourceSetMetrics metrics = new LocalResourceSetMetrics();
 
   public static LocalResourceSet create(List<LimitedResource> resources) {
     LocalResourceSet resourceSet = new LocalResourceSet();
     for (LimitedResource resource : resources) {
-      resourceSet.resources.put(resource.getName(), new Semaphore(resource.getAmount()));
-      metrics.resourceTotalMetric.labels(resource.getName()).set(resource.getAmount());
+      Semaphore s = new Semaphore(resource.getAmount());
+      resourceSet.resources.put(resource.getName(), s);
+      Gauge.builder("local.resource.usage", () -> s.availablePermits())
+          .tag("resource_name", resource.getName())
+          .description("The number of claims for each resource currently being used for execution")
+          .register(Metrics.globalRegistry);
     }
     return resourceSet;
   }
@@ -88,17 +93,13 @@ public class LocalResourceSetUtils {
 
   private static boolean semaphoreAquire(Semaphore resource, String resourceName, int amount) {
     boolean wasAcquired = resource.tryAcquire(amount);
-    if (wasAcquired) {
-      metrics.resourceUsageMetric.labels(resourceName).inc(amount);
-    }
-    metrics.requestersMetric.labels(resourceName).inc();
+    //    metrics.requestersMetric.labels(resourceName).inc();
     return wasAcquired;
   }
 
   private static void semaphoreRelease(Semaphore resource, String resourceName, int amount) {
     resource.release(amount);
-    metrics.resourceUsageMetric.labels(resourceName).dec(amount);
-    metrics.requestersMetric.labels(resourceName).dec();
+    //    metrics.requestersMetric.labels(resourceName).dec();
   }
 
   private static int getResourceRequestAmount(Platform.Property property) {
