@@ -92,10 +92,12 @@ import io.grpc.Deadline;
 import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ServerCallStreamObserver;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.observation.Observation;
 import io.netty.handler.codec.http.QueryStringDecoder;
-import io.prometheus.client.Counter;
-import io.prometheus.client.Gauge;
-import io.prometheus.client.Histogram;
 import java.io.FilterOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -142,34 +144,34 @@ import org.json.simple.JSONObject;
 
 @Log
 public abstract class CASFileCache implements ContentAddressableStorage {
-  // Prometheus metrics
-  private static final Counter expiredKeyCounter =
-      Counter.build().name("expired_key").help("Number of key expirations.").register();
-  private static final Gauge casSizeMetric =
-      Gauge.build().name("cas_size").help("CAS size.").register();
-  private static final Gauge casEntryCountMetric =
-      Gauge.build().name("cas_entry_count").help("Number of entries in the CAS.").register();
-  private static Histogram casTtl =
-      Histogram.build()
-          .name("cas_ttl_s")
-          .buckets(
-              3600, // 1 hour
-              21600, // 6 hours
-              86400, // 1 day
-              345600, // 4 days
-              604800, // 1 week
-              1210000 // 2 weeks
-              )
-          .help("The amount of time CAS entries live on L1 storage before expiration (seconds)")
-          .register();
-
+  // Metrics
+  private final Counter expiredKeyCounter =
+      Counter.builder("expired.key")
+          .description("Number of key expirations.")
+          .register(Metrics.globalRegistry);
+  private final Gauge casSizeMetric =
+      Gauge.builder("cas.size", this::size)
+          .baseUnit("bytes")
+          .description("CAS size.")
+          .register(Metrics.globalRegistry);
+  private final Gauge casEntryCountMetric =
+      Gauge.builder("cas.entry.count", this::entryCount)
+          .description("Number of entries in the CAS.")
+          .register(Metrics.globalRegistry);
+  private final DistributionSummary casTtl =
+      DistributionSummary.builder("cas.ttl")
+          .baseUnit("seconds")
+          .description(
+              "The amount of time CAS entries live on L1 storage before expiration (seconds)")
+          .register(Metrics.globalRegistry);
   private static final Counter casCopyFallbackMetric =
-      Counter.build()
-          .name("cas_copy_fallback")
-          .help("Number of times the CAS performed a file copy because hardlinking failed")
-          .register();
+
+      Counter.builder("cas.copy.fallback")
+          .description("Number of times the CAS performed a file copy because hardlinking failed")
+          .register(Metrics.globalRegistry);
   private static final Counter readIOErrors =
-      Counter.build().name("read_io_errors").help("Number of IO errors on read.").register();
+      Counter.builder("read.io.errors").description("Number of IO errors on read.").register(Metrics.globalRegistry);
+
 
   protected static final String DEFAULT_DIRECTORIES_INDEX_NAME = "directories.sqlite";
   protected static final String DIRECTORIES_INDEX_NAME_MEMORY = ":memory:";
@@ -253,8 +255,11 @@ public abstract class CASFileCache implements ContentAddressableStorage {
   @GuardedBy("this")
   private int removedEntryCount = 0;
 
-  private Thread prometheusMetricsThread;
-
+  /**
+   * Returns CAS Total size, in bytes.
+   *
+   * @return CAS Total size, in bytes. Guaranteed not to be negative.
+   */
   public synchronized long size() {
     return sizeInBytes;
   }
@@ -539,7 +544,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
           input.skip(offset);
         } catch (IOException ioEx) {
           if (!(ioEx instanceof NoSuchFileException)) {
-            readIOErrors.inc();
+            readIOErrors.increment();
             log.log(
                 Level.WARNING,
                 format("error opening %s at %d", DigestUtil.toString(digest), offset),
@@ -1297,10 +1302,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
   }
 
   public void stop() throws InterruptedException {
-    if (prometheusMetricsThread != null) {
-      prometheusMetricsThread.interrupt();
-      prometheusMetricsThread.join();
-    }
+    /* no-op since we removed PrometheusThread */
   }
 
   public StartupCacheResults start(boolean skipLoad) throws IOException, InterruptedException {
@@ -1347,26 +1349,6 @@ public abstract class CASFileCache implements ContentAddressableStorage {
     Instant endTime = Instant.now();
     Duration startupTime = Duration.between(startTime, endTime);
     log.log(Level.INFO, "Startup Time: " + startupTime.getSeconds() + "s");
-
-    // Start metrics collection thread
-    prometheusMetricsThread =
-        new Thread(
-            () -> {
-              while (!Thread.currentThread().isInterrupted()) {
-                try {
-                  casSizeMetric.set(size());
-                  casEntryCountMetric.set(entryCount());
-                  MINUTES.sleep(5);
-                } catch (InterruptedException e) {
-                  Thread.currentThread().interrupt();
-                  break;
-                } catch (Exception e) {
-                  log.log(Level.SEVERE, "Could not update CasFileCache metrics", e);
-                }
-              }
-            },
-            "Prometheus CAS Metrics Collector");
-    prometheusMetricsThread.start();
 
     // return information about the cache startup.
     StartupCacheResults startupResults = new StartupCacheResults();
@@ -2132,7 +2114,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
       // you're performance may degrade significantly.  Therefore we provide a metric
       // signal to allow detection of this fallback.
       Files.copy(cacheFilePath, filePath, StandardCopyOption.REPLACE_EXISTING);
-      casCopyFallbackMetric.inc();
+      casCopyFallbackMetric.increment();
 
       // TODO: A more optimal strategy would be to provide additional inodes
       // (i.e. one backing file for a 65k or smaller link count) as a strategy,
@@ -2749,14 +2731,10 @@ public abstract class CASFileCache implements ContentAddressableStorage {
 
     Files.delete(path);
 
-    publishExpirationMetric(createdTimeMs);
-  }
-
-  private void publishExpirationMetric(long createdTimeMs) {
     // TODO introduce ttl clock
     long currentTimeMs = new Date().getTime();
     long ttlMs = currentTimeMs - createdTimeMs;
-    casTtl.observe(Time.millisecondsToSeconds(ttlMs));
+    casTtl.record(Time.millisecondsToSeconds(ttlMs));
   }
 
   @SuppressWarnings({"ConstantConditions", "ResultOfMethodCallIgnored"})
@@ -2798,7 +2776,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
                           getKey(fileEntryKey.getDigest(), !fileEntryKey.isExecutable()))) {
                         return immediateFuture(null);
                       }
-                      expiredKeyCounter.inc();
+                      expiredKeyCounter.increment();
                       log.log(Level.FINE, format("expired key %s", expiredKey));
                       return immediateFuture(fileEntryKey.getDigest());
                     },

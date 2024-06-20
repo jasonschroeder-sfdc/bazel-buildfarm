@@ -48,7 +48,8 @@ import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.Status;
 import io.grpc.Status.Code;
 import io.grpc.stub.StreamObserver;
-import io.prometheus.client.Histogram;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.Metrics;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
@@ -58,12 +59,11 @@ import lombok.extern.java.Log;
 @Log
 public class ContentAddressableStorageService
     extends ContentAddressableStorageGrpc.ContentAddressableStorageImplBase {
-  private static final Histogram missingBlobs =
-      Histogram.build()
-          .exponentialBuckets(1, 2, 6)
-          .name("missing_blobs")
-          .help("Find missing blobs.")
-          .register();
+  private static final DistributionSummary missingBlobs =
+      DistributionSummary.builder("missing.blobs")
+          .baseUnit("blobs")
+          .description("Find missing blobs.")
+          .register(Metrics.globalRegistry);
 
   private final Instance instance;
   private final long writeDeadlineAfter;
@@ -107,7 +107,7 @@ public class ContentAddressableStorageService
               responseObserver.onNext(response);
               responseObserver.onCompleted();
               long elapsedMicros = stopwatch.elapsed(MICROSECONDS);
-              missingBlobs.observe(request.getBlobDigestsList().size());
+              missingBlobs.record(request.getBlobDigestsList().size());
               log.log(
                   Level.FINER,
                   "FindMissingBlobs("

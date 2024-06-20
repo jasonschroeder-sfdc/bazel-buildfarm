@@ -130,9 +130,9 @@ import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
 import io.grpc.protobuf.StatusProto;
 import io.grpc.stub.ServerCallStreamObserver;
-import io.prometheus.client.Counter;
-import io.prometheus.client.Gauge;
-import io.prometheus.client.Histogram;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Metrics;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -181,55 +181,59 @@ public class ServerInstance extends NodeInstance {
 
   // Prometheus metrics
   private static final Counter executionSuccess =
-      Counter.build().name("execution_success").help("Execution success.").register();
-  private static final Gauge preQueueSize =
-      Gauge.build().name("pre_queue_size").help("Pre queue size.").register();
+      Counter.builder("execution.success")
+          .description("Execution success.")
+          .register(Metrics.globalRegistry);
+
+  private final Gauge preQueueSize =
+      Gauge.builder("pre.queue.size", () -> backplaneStatus().getPrequeue().getSize())
+          .description("Pre queue size.")
+          .register(Metrics.globalRegistry);
   private static final Counter casHitCounter =
-      Counter.build()
-          .name("cas_hit")
-          .help("Number of successful CAS hits from worker-worker.")
-          .register();
+      Counter.builder("cas.hit")
+          .description("Number of successful CAS hits from worker-worker.")
+          .register(Metrics.globalRegistry);
   private static final Counter casMissCounter =
-      Counter.build().name("cas_miss").help("Number of CAS misses from worker-worker.").register();
+      Counter.builder("cas.miss")
+          .description("Number of CAS misses from worker-worker.")
+          .register(Metrics.globalRegistry);
   private static final Counter requeueFailureCounter =
-      Counter.build()
-          .name("requeue_failure")
-          .help("Number of operations that failed to requeue.")
-          .register();
+      Counter.builder("requeue.failure")
+          .description("Number of operations that failed to requeue.")
+          .register(Metrics.globalRegistry);
   private static final Counter queueFailureCounter =
-      Counter.build()
-          .name("queue_failure")
-          .help("Number of operations that failed to queue.")
-          .register();
+      Counter.builder("queue.failure")
+          .description("Number of operations that failed to queue.")
+          .register(Metrics.globalRegistry);
   // Metrics about the dispatched operations
-  private static final Gauge dispatchedOperationsSize =
-      Gauge.build()
-          .name("dispatched_operations_size")
-          .help("Dispatched operations size.")
-          .register();
+  private final Gauge dispatchedOperationsSize =
+      Gauge.builder("dispatched.operations", () -> backplaneStatus().getDispatchedSize())
+          .description("Dispatched operations size.")
+          .register(Metrics.globalRegistry);
 
   // Other metrics from the backplane
-  private static final Gauge workerPoolSize =
-      Gauge.build().name("worker_pool_size").help("Active worker pool size.").register();
-  private static final Gauge storageWorkerPoolSize =
-      Gauge.build()
-          .name("storage_worker_pool_size")
-          .help("Active storage worker pool size.")
-          .register();
-  private static final Gauge executeWorkerPoolSize =
-      Gauge.build()
-          .name("execute_worker_pool_size")
-          .help("Active execute worker pool size.")
-          .register();
-  private static final Gauge queueSize =
-      Gauge.build().name("queue_size").labelNames("queue_name").help("Queue size.").register();
+  private final Gauge workerPoolSize =
+      Gauge.builder("worker.pool", () -> backplaneStatus().getActiveWorkersCount())
+          .description("Active worker pool size.")
+          .register(Metrics.globalRegistry);
+  private final Gauge storageWorkerPoolSize =
+      Gauge.builder(
+              "storage_worker_pool_size", () -> backplaneStatus().getActiveStorageWorkersCount())
+          .description("Active storage worker pool size.")
+          .register(Metrics.globalRegistry);
+  private final Gauge executeWorkerPoolSize =
+      Gauge.builder(
+              "execute_worker_pool_size", () -> backplaneStatus().getActiveStorageWorkersCount())
+          .description("Active execute worker pool size.")
+          .register(Metrics.globalRegistry);
 
-  private static final Histogram ioMetric =
-      Histogram.build()
-          .name("io_bytes_read")
-          .buckets(new double[] {10, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000})
-          .help("Read I/O (bytes)")
-          .register();
+  //  private static final Histogram ioMetric =
+  //      Histogram.build()
+  //          .name("io_bytes_read")
+  //          .buckets(new double[] {10, 1000, 10000, 100000, 1000000, 10000000, 100000000,
+  // 1000000000})
+  //          .help("Read I/O (bytes)")
+  //          .register(Metrics.globalRegistry);
 
   private final Runnable onStop;
   private final long maxEntrySizeBytes;
@@ -262,7 +266,6 @@ public class ServerInstance extends NodeInstance {
   private Thread operationQueuer;
   private boolean stopping = false;
   private boolean stopped = true;
-  private final Thread prometheusMetricsThread;
 
   private static BuildfarmConfigs configs = BuildfarmConfigs.getInstance();
 
@@ -484,7 +487,7 @@ public class ServerInstance extends NodeInstance {
 
                           @Override
                           public void onFailure(Throwable t) {
-                            queueFailureCounter.inc();
+                            queueFailureCounter.increment();
                             log.log(Level.SEVERE, "error queueing " + operationName, t);
                           }
                         },
@@ -500,7 +503,7 @@ public class ServerInstance extends NodeInstance {
                     return queueFuture;
                   } catch (Throwable t) {
                     poller.pause();
-                    queueFailureCounter.inc();
+                    queueFailureCounter.increment();
                     log.log(Level.SEVERE, "error queueing " + operationName, t);
                     return immediateFuture(null);
                   }
@@ -554,39 +557,20 @@ public class ServerInstance extends NodeInstance {
     } else {
       operationQueuer = null;
     }
-
-    prometheusMetricsThread =
-        new Thread(
-            () -> {
-              while (!Thread.currentThread().isInterrupted()) {
-                try {
-                  TimeUnit.SECONDS.sleep(30);
-                  BackplaneStatus backplaneStatus = backplaneStatus();
-                  workerPoolSize.set(backplaneStatus.getActiveWorkersCount());
-                  executeWorkerPoolSize.set(backplaneStatus.getActiveExecuteWorkersCount());
-                  storageWorkerPoolSize.set(backplaneStatus.getActiveStorageWorkersCount());
-                  dispatchedOperationsSize.set(backplaneStatus.getDispatchedSize());
-                  preQueueSize.set(backplaneStatus.getPrequeue().getSize());
-                  updateQueueSizes(backplaneStatus.getOperationQueue().getProvisionsList());
-                } catch (InterruptedException e) {
-                  Thread.currentThread().interrupt();
-                  break;
-                } catch (Exception e) {
-                  log.log(Level.SEVERE, "Could not update RedisShardBackplane metrics", e);
-                }
-              }
-            },
-            "Prometheus Metrics Collector");
   }
 
   private void updateQueueSizes(List<QueueStatus> queues) {
-    if (queueSize != null) {
-      for (QueueStatus queueStatus : queues) {
-        queueSize
-            .labels(RedisHashtags.unhashedName(queueStatus.getName()))
-            .set(queueStatus.getSize());
-      }
-    }
+    //    if (queueSize != null) {
+    //      for (QueueStatus queueStatus : queues) {
+    // # TODO
+    //            Gauge.builder("queue_size").labelNames("queue_name").description("Queue
+    // size.").register(Metrics.globalRegistry);
+
+    //        queueSize
+    //            .labels(RedisHashtags.unhashedName(queueStatus.getName()))
+    //            .set(queueStatus.getSize());
+    //      }
+    //    }
   }
 
   private void ensureCanQueue(Stopwatch stopwatch) throws IOException, InterruptedException {
@@ -618,10 +602,6 @@ public class ServerInstance extends NodeInstance {
     if (operationQueuer != null) {
       operationQueuer.start();
     }
-
-    if (prometheusMetricsThread != null) {
-      prometheusMetricsThread.start();
-    }
   }
 
   @Override
@@ -638,9 +618,6 @@ public class ServerInstance extends NodeInstance {
     if (dispatchedMonitor != null) {
       dispatchedMonitor.interrupt();
       dispatchedMonitor.join();
-    }
-    if (prometheusMetricsThread != null) {
-      prometheusMetricsThread.interrupt();
     }
     contextDeadlineScheduler.shutdown();
     operationDeletionService.shutdown();
@@ -1009,7 +986,7 @@ public class ServerInstance extends NodeInstance {
                   removeMalfunctioningWorker(
                       worker, t, "getBlob(" + DigestUtil.toString(blobDigest) + ")");
                 } else if (status.getCode() == Code.NOT_FOUND) {
-                  casMissCounter.inc();
+                  casMissCounter.increment();
                   log.log(
                       configs.getServer().isEnsureOutputsPresent() ? Level.WARNING : Level.FINER,
                       worker + " did not contain " + DigestUtil.toString(blobDigest));
@@ -1064,7 +1041,7 @@ public class ServerInstance extends NodeInstance {
               @Override
               public void onCompleted() {
                 blobObserver.onCompleted();
-                casHitCounter.inc();
+                casHitCounter.increment();
               }
             },
             requestMetadata);
@@ -1915,7 +1892,7 @@ public class ServerInstance extends NodeInstance {
 
           @Override
           public void onFailure(Throwable t) {
-            requeueFailureCounter.inc();
+            requeueFailureCounter.increment();
             log.log(Level.SEVERE, "failed to requeue: " + operationName, t);
             com.google.rpc.Status status = StatusProto.fromThrowable(t);
             if (status == null) {
@@ -1988,7 +1965,7 @@ public class ServerInstance extends NodeInstance {
     // Skip requeuing and fail the operation if its in a deny list.
     if (inDenyList(executeEntry.getRequestMetadata())) {
       String msg = operationBlockedError(operationName);
-      requeueFailureCounter.inc();
+      requeueFailureCounter.increment();
       log.log(Level.WARNING, msg);
       putFailedOperation(executeEntry, msg);
       return false;
@@ -1998,7 +1975,7 @@ public class ServerInstance extends NodeInstance {
     if (queueEntry.getRequeueAttempts() > maxRequeueAttempts) {
       String msg =
           tooManyRequeuesError(operationName, queueEntry.getRequeueAttempts(), maxRequeueAttempts);
-      requeueFailureCounter.inc();
+      requeueFailureCounter.increment();
       log.log(Level.WARNING, msg);
       putFailedOperation(executeEntry, msg);
       return false;
@@ -2008,7 +1985,7 @@ public class ServerInstance extends NodeInstance {
     // This would prevent us from being able to requeue it anyways.
     if (operation == null) {
       String msg = operationMissingMessage(operationName);
-      requeueFailureCounter.inc();
+      requeueFailureCounter.increment();
       log.log(Level.WARNING, msg);
       backplane.deleteOperation(operationName); // signal watchers
       return false;
@@ -2111,7 +2088,7 @@ public class ServerInstance extends NodeInstance {
 
       String operationName = createOperationName(UUID.randomUUID().toString());
 
-      executionSuccess.inc();
+      executionSuccess.increment();
       log.log(
           Level.FINER,
           new StringBuilder()

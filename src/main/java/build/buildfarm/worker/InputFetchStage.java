@@ -15,28 +15,32 @@
 package build.buildfarm.worker;
 
 import com.google.common.collect.Sets;
-import io.prometheus.client.Gauge;
-import io.prometheus.client.Histogram;
+
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Timer;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 import lombok.extern.java.Log;
 
 @Log
 public class InputFetchStage extends SuperscalarPipelineStage {
-  private static final Gauge inputFetchSlotUsage =
-      Gauge.build().name("input_fetch_slot_usage").help("Input fetch slot Usage.").register();
-  private static final Histogram inputFetchTime =
-      Histogram.build().name("input_fetch_time_ms").help("Input fetch time in ms.").register();
-  private static final Histogram inputFetchStallTime =
-      Histogram.build()
-          .name("input_fetch_stall_time_ms")
-          .help("Input fetch stall time in ms.")
-          .register();
-
   private final Set<Thread> fetchers = Sets.newHashSet();
   private final BlockingQueue<OperationContext> queue = new ArrayBlockingQueue<>(1);
+
+  private final Gauge inputFetchSlotUsage =
+      Gauge.builder("input.fetch.slot.usage", this::getSlotUsage)
+          .description("Input fetch slot Usage.")
+          .register(Metrics.globalRegistry);
+  private final Timer inputFetchTime =
+      Timer.builder("input.fetch").description("Input fetch").register(Metrics.globalRegistry);
+  private final Timer inputFetchStallTime =
+      Timer.builder("input.fetch.stall")
+          .description("Input fetch stall time")
+          .register(Metrics.globalRegistry);
 
   public InputFetchStage(WorkerContext workerContext, PipelineStage output, PipelineStage error) {
     super("InputFetchStage", workerContext, output, error, workerContext.getInputFetchStageWidth());
@@ -63,15 +67,14 @@ public class InputFetchStage extends SuperscalarPipelineStage {
     }
     releaseClaim(operationName, 1);
     int slotUsage = fetchers.size();
-    inputFetchSlotUsage.set(slotUsage);
     return slotUsage;
   }
 
   public void releaseInputFetcher(
       String operationName, long usecs, long stallUSecs, boolean success) {
     int size = removeAndRelease(operationName);
-    inputFetchTime.observe(usecs / 1000.0);
-    inputFetchStallTime.observe(stallUSecs / 1000.0);
+    inputFetchTime.record(usecs, TimeUnit.MICROSECONDS);
+    inputFetchStallTime.record(stallUSecs, TimeUnit.MICROSECONDS);
     complete(
         operationName,
         usecs,
@@ -106,7 +109,6 @@ public class InputFetchStage extends SuperscalarPipelineStage {
     synchronized (this) {
       fetchers.add(fetcher);
       int slotUsage = fetchers.size();
-      inputFetchSlotUsage.set(slotUsage);
       start(operationContext.queueEntry.getExecuteEntry().getOperationName(), getUsage(slotUsage));
       fetcher.start();
     }

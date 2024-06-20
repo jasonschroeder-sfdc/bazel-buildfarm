@@ -82,7 +82,7 @@ public class Time {
    * @return The difference, in milliseconds
    * @throws IllegalArgumentException if start > end.
    */
-  public static double toDurationMs(Timestamp start, Timestamp end) {
+  public static long toDurationMs(Timestamp start, Timestamp end) {
     // start must be <= end
     checkArgument(Timestamps.compare(start, end) <= 0);
     return Durations.toMillis(Timestamps.between(start, end));

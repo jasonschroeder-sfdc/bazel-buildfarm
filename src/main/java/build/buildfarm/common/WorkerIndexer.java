@@ -14,7 +14,6 @@
 
 package build.buildfarm.common;
 
-import io.prometheus.client.Gauge;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -32,19 +31,6 @@ import redis.clients.jedis.resps.ScanResult;
  */
 @Log
 public class WorkerIndexer {
-  private static final Gauge indexerKeysRemovedGauge =
-      Gauge.build()
-          .name("cas_indexer_removed_keys")
-          .labelNames("node")
-          .help("Indexer results - Number of keys removed")
-          .register();
-  private static final Gauge indexerHostsRemovedGauge =
-      Gauge.build()
-          .name("cas_indexer_removed_hosts")
-          .labelNames("node")
-          .help("Indexer results - Number of hosts removed")
-          .register();
-
   /**
    * @brief Handle the reindexing the CAS entries based on a departing worker.
    * @details This is intended to be called by a service endpoint as part of gracefully shutting

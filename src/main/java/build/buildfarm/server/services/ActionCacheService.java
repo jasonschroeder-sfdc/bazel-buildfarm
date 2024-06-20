@@ -31,7 +31,8 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
-import io.prometheus.client.Counter;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Metrics;
 import java.util.logging.Level;
 import javax.annotation.Nullable;
 import lombok.extern.java.Log;
@@ -39,7 +40,9 @@ import lombok.extern.java.Log;
 @Log
 public class ActionCacheService extends ActionCacheGrpc.ActionCacheImplBase {
   private static final Counter actionResultsMetric =
-      Counter.build().name("action_results").help("Action results.").register();
+      Counter.builder("action.results")
+          .description("Action results.")
+          .register(Metrics.globalRegistry);
 
   private final Instance instance;
   private final boolean isWritable;
@@ -99,7 +102,7 @@ public class ActionCacheService extends ActionCacheGrpc.ActionCacheImplBase {
           }
         },
         directExecutor());
-    actionResultsMetric.inc();
+    actionResultsMetric.increment();
   }
 
   @Override

@@ -16,8 +16,9 @@ package build.buildfarm.worker;
 
 import build.buildfarm.worker.resources.ResourceLimits;
 import com.google.common.collect.Sets;
-import io.prometheus.client.Gauge;
-import io.prometheus.client.Histogram;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Timer;
 import java.io.IOException;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -30,19 +31,23 @@ import lombok.extern.java.Log;
 
 @Log
 public class ExecuteActionStage extends SuperscalarPipelineStage {
-  private static final Gauge executionSlotUsage =
-      Gauge.build().name("execution_slot_usage").help("Execution slot Usage.").register();
-  private static final Histogram executionTime =
-      Histogram.build().name("execution_time_ms").help("Execution time in ms.").register();
-  private static final Histogram executionStallTime =
-      Histogram.build()
-          .name("execution_stall_time_ms")
-          .help("Execution stall time in ms.")
-          .register();
-
   private final Set<Thread> executors = Sets.newHashSet();
   private final AtomicInteger executorClaims = new AtomicInteger(0);
   private final BlockingQueue<OperationContext> queue = new ArrayBlockingQueue<>(1);
+
+  private final Gauge executionSlotUsage =
+      Gauge.builder("execution.slot.usage", () -> executorClaims.get())
+          .baseUnit("slots")
+          .description("Execution slot Usage.")
+          .register(Metrics.globalRegistry);
+  private static final Timer executionTime =
+      Timer.builder("execution.time")
+          .description("Execution time")
+          .register(Metrics.globalRegistry);
+  private static final Timer executionStallTime =
+      Timer.builder("execution.stall")
+          .description("Execution stall")
+          .register(Metrics.globalRegistry);
 
   public ExecuteActionStage(
       WorkerContext workerContext, PipelineStage output, PipelineStage error) {
@@ -98,15 +103,14 @@ public class ExecuteActionStage extends SuperscalarPipelineStage {
     }
     releaseClaim(operationName, claims);
     int slotUsage = executorClaims.addAndGet(-claims);
-    executionSlotUsage.set(slotUsage);
     return slotUsage;
   }
 
   public void releaseExecutor(
       String operationName, int claims, long usecs, long stallUSecs, int exitCode) {
     int slotUsage = removeAndRelease(operationName, claims);
-    executionTime.observe(usecs / 1000.0);
-    executionStallTime.observe(stallUSecs / 1000.0);
+    executionTime.record(usecs, TimeUnit.MICROSECONDS);
+    executionStallTime.record(stallUSecs, TimeUnit.MICROSECONDS);
     complete(
         operationName,
         usecs,
@@ -140,7 +144,6 @@ public class ExecuteActionStage extends SuperscalarPipelineStage {
     synchronized (this) {
       executors.add(executorThread);
       int slotUsage = executorClaims.addAndGet(limits.cpu.claimed);
-      executionSlotUsage.set(slotUsage);
       start(operationContext.operation.getName(), getUsage(slotUsage));
       executorThread.start();
     }

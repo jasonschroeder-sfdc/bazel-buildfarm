@@ -76,8 +76,9 @@ import io.grpc.Status.Code;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.protobuf.services.HealthStatusManager;
 import io.grpc.protobuf.services.ProtoReflectionService;
-import io.prometheus.client.Counter;
-import io.prometheus.client.Gauge;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Metrics;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileSystem;
@@ -100,28 +101,33 @@ import lombok.extern.java.Log;
 public final class Worker extends LoggingMain {
   private static final java.util.logging.Logger nettyLogger =
       java.util.logging.Logger.getLogger("io.grpc.netty");
-  private static final Counter healthCheckMetric =
-      Counter.build()
-          .name("health_check")
-          .labelNames("lifecycle")
-          .help("Service health check.")
-          .register();
-  private static final Counter workerPausedMetric =
-      Counter.build().name("worker_paused").help("Worker paused.").register();
-  private static final Gauge executionSlotsTotal =
-      Gauge.build()
-          .name("execution_slots_total")
-          .help("Total execution slots configured on worker.")
-          .register();
-  private static final Gauge inputFetchSlotsTotal =
-      Gauge.build()
-          .name("input_fetch_slots_total")
-          .help("Total input fetch slots configured on worker.")
-          .register();
-
-  private static final int shutdownWaitTimeInSeconds = 10;
 
   private static BuildfarmConfigs configs = BuildfarmConfigs.getInstance();
+
+  private static final Counter healthCheckStartMetric =
+      Counter.builder("health.check")
+          .tag("lifecycle", "start")
+          .description("Service health check.")
+          .register(Metrics.globalRegistry);
+  private static final Counter healthCheckStopMetric =
+      Counter.builder("health.check")
+          .tag("lifecycle", "stop")
+          .description("Service health check.")
+          .register(Metrics.globalRegistry);
+  private static final Counter workerPausedMetric =
+      Counter.builder("worker.paused")
+          .description("Worker paused.")
+          .register(Metrics.globalRegistry);
+  private static final Gauge executionSlotsTotal =
+      Gauge.builder("execution.slots", () -> configs.getWorker().getExecuteStageWidth())
+          .description("Total execution slots configured on worker.")
+          .register(Metrics.globalRegistry);
+  private static final Gauge inputFetchSlotsTotal =
+      Gauge.builder("input.fetch.slots", () -> configs.getWorker().getInputFetchStageWidth())
+          .description("Total input fetch slots configured on worker.")
+          .register(Metrics.globalRegistry);
+
+  private static final int shutdownWaitTimeInSeconds = 10;
 
   private boolean inGracefulShutdown = false;
   private boolean isPaused = false;
@@ -500,7 +506,7 @@ public final class Worker extends LoggingMain {
                     isPaused = true;
                     log.log(Level.INFO, "The current worker is paused from taking on new work!");
                     pipeline.stopMatchingOperations();
-                    workerPausedMetric.inc();
+                    workerPausedMetric.increment();
                   }
                 } catch (Exception e) {
                   log.log(Level.WARNING, "Could not open .paused file.", e);
@@ -582,18 +588,11 @@ public final class Worker extends LoggingMain {
     ExecutorService fetchService = BuildfarmExecutors.getFetchServicePool();
     FixedBufferPool zstdBufferPool =
         new FixedBufferPool(configs.getWorker().getZstdBufferPoolSize());
-    Gauge.build()
-        .name("zstd_buffer_pool_used")
-        .help("Current number of Zstd decompression buffers active")
-        .create()
-        .setChild(
-            new Gauge.Child() {
-              @Override
-              public double get() {
-                return zstdBufferPool.getNumActive();
-              }
-            })
-        .register();
+    // TODO(jschroeder) move to
+    // https://docs.micrometer.io/micrometer/reference/reference/commons-pool.html
+    Gauge.builder("zstd.buffer.pool", zstdBufferPool::getNumActive)
+        .description("Current number of Zstd decompression buffers active")
+        .register(Metrics.globalRegistry);
 
     InputStreamFactory remoteInputStreamFactory =
         new RemoteInputStreamFactory(
@@ -671,9 +670,7 @@ public final class Worker extends LoggingMain {
     startFailsafeRegistration();
 
     pipeline.start();
-    healthCheckMetric.labels("start").inc();
-    executionSlotsTotal.set(configs.getWorker().getExecuteStageWidth());
-    inputFetchSlotsTotal.set(configs.getWorker().getInputFetchStageWidth());
+    healthCheckStartMetric.increment();
 
     log.log(INFO, String.format("%s initialized", identifier));
   }
@@ -729,9 +726,7 @@ public final class Worker extends LoggingMain {
     }
     healthStatusManager.setStatus(
         HealthStatusManager.SERVICE_NAME_ALL_SERVICES, ServingStatus.NOT_SERVING);
-    healthCheckMetric.labels("stop").inc();
-    executionSlotsTotal.set(0);
-    inputFetchSlotsTotal.set(0);
+    healthCheckStopMetric.increment();
     if (execFileSystem != null) {
       log.info("Stopping exec filesystem");
       execFileSystem.stop();

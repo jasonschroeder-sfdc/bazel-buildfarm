@@ -26,44 +26,24 @@ import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.util.JsonFormat;
 import com.google.rpc.Code;
 import com.google.rpc.PreconditionFailure;
-import io.prometheus.client.Counter;
-import io.prometheus.client.Histogram;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.Timer;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import lombok.extern.java.Log;
 
 @Log
 public abstract class AbstractMetricsPublisher implements MetricsPublisher {
-  private static final Counter actionsCounter =
-      Counter.build().name("actions").help("Number of actions.").register();
-  private static final Counter operationsInStage =
-      Counter.build()
-          .name("operations_stage_load")
-          .labelNames("stage_name")
-          .help("Operations in stage.")
-          .register();
-  private static final Counter operationStatus =
-      Counter.build()
-          .name("operation_status")
-          .labelNames("code")
-          .help("Operation execution status.")
-          .register();
-  private static final Counter operationsPerWorker =
-      Counter.build()
-          .name("operation_worker")
-          .labelNames("worker_name")
-          .help("Operations per worker.")
-          .register();
+  private final Counter actionsCounter =
+      Counter.builder("actions").description("Number of actions.").register(Metrics.globalRegistry);
 
-  private static final Counter operationExitCode =
-      Counter.build()
-          .name("operation_exit_code")
-          .labelNames("exit_code")
-          .help("Operation execution exit code.")
-          .register();
-  private static final Histogram queuedTime =
-      Histogram.build().name("queued_time_ms").help("Queued time in ms.").register();
-  private static final Histogram outputUploadTime =
-      Histogram.build().name("output_upload_time_ms").help("Output upload time in ms.").register();
+  private static final Timer queuedTime =
+      Timer.builder("queued.time").description("Queued time").register(Metrics.globalRegistry);
+  private static final Timer outputUploadTime =
+      Timer.builder("output.upload")
+          .description("Output upload time")
+          .register(Metrics.globalRegistry);
 
   private final String clusterId;
 
@@ -73,6 +53,34 @@ public abstract class AbstractMetricsPublisher implements MetricsPublisher {
 
   public AbstractMetricsPublisher() {
     this(/* clusterId= */ null);
+  }
+
+  private static Counter operationsPerWorkerCounter(String operationWorker) {
+    return Counter.builder("operation.worker")
+        .tag("worker", operationWorker)
+        .description("Operations per worker.")
+        .register(Metrics.globalRegistry);
+  }
+
+  private static Counter operationExitCodeCounter(String exitCode) {
+    return Counter.builder("operation.exit.code")
+        .tag("exit_code", exitCode)
+        .description("Operation execution exit code.")
+        .register(Metrics.globalRegistry);
+  }
+
+  private static Counter operationsInStageCounter(String stageName) {
+    return Counter.builder("operations.stage.load")
+        .tag("stage_name", stageName)
+        .description("Operations in stage.")
+        .register(Metrics.globalRegistry);
+  }
+
+  private static Counter operationStatusCounter(String code) {
+    return Counter.builder("operation.status")
+        .tag("code", code)
+        .description("Operation execution status.")
+        .register(Metrics.globalRegistry);
   }
 
   @Override
@@ -87,7 +95,7 @@ public abstract class AbstractMetricsPublisher implements MetricsPublisher {
   protected OperationRequestMetadata populateRequestMetadata(
       Operation operation, RequestMetadata requestMetadata) {
     try {
-      actionsCounter.inc();
+      actionsCounter.increment();
       OperationRequestMetadata operationRequestMetadata =
           OperationRequestMetadata.newBuilder()
               .setRequestMetadata(requestMetadata)
@@ -100,29 +108,25 @@ public abstract class AbstractMetricsPublisher implements MetricsPublisher {
             operationRequestMetadata.toBuilder()
                 .setExecuteResponse(operation.getResponse().unpack(ExecuteResponse.class))
                 .build();
-        operationStatus
-            .labels(
+        operationExitCodeCounter(
                 Code.forNumber(operationRequestMetadata.getExecuteResponse().getStatus().getCode())
                     .name())
-            .inc();
-        operationExitCode
-            .labels(
-                Integer.toString(
-                    operationRequestMetadata.getExecuteResponse().getResult().getExitCode()))
-            .inc();
+            .increment();
         if (operationRequestMetadata.getExecuteResponse().hasResult()
             && operationRequestMetadata.getExecuteResponse().getResult().hasExecutionMetadata()) {
           ExecutedActionMetadata executionMetadata =
               operationRequestMetadata.getExecuteResponse().getResult().getExecutionMetadata();
-          operationsPerWorker.labels(executionMetadata.getWorker()).inc();
-          queuedTime.observe(
+          operationsPerWorkerCounter(executionMetadata.getWorker()).increment();
+          queuedTime.record(
               Time.toDurationMs(
                   executionMetadata.getQueuedTimestamp(),
-                  executionMetadata.getExecutionStartTimestamp()));
-          outputUploadTime.observe(
+                  executionMetadata.getExecutionStartTimestamp()),
+              TimeUnit.MILLISECONDS);
+          outputUploadTime.record(
               Time.toDurationMs(
                   executionMetadata.getOutputUploadStartTimestamp(),
-                  executionMetadata.getOutputUploadCompletedTimestamp()));
+                  executionMetadata.getOutputUploadCompletedTimestamp()),
+              TimeUnit.MILLISECONDS);
         }
       }
       if (operation.getMetadata().is(ExecuteOperationMetadata.class)) {
@@ -131,9 +135,9 @@ public abstract class AbstractMetricsPublisher implements MetricsPublisher {
                 .setExecuteOperationMetadata(
                     operation.getMetadata().unpack(ExecuteOperationMetadata.class))
                 .build();
-        operationsInStage
-            .labels(operationRequestMetadata.getExecuteOperationMetadata().getStage().name())
-            .inc();
+        operationsInStageCounter(
+                operationRequestMetadata.getExecuteOperationMetadata().getStage().name())
+            .increment();
       }
       return operationRequestMetadata;
     } catch (Exception e) {

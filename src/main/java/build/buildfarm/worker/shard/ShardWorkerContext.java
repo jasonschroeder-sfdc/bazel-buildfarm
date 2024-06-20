@@ -83,7 +83,8 @@ import com.google.rpc.PreconditionFailure;
 import io.grpc.Deadline;
 import io.grpc.Status;
 import io.grpc.StatusException;
-import io.prometheus.client.Counter;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Metrics;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -107,9 +108,13 @@ class ShardWorkerContext implements WorkerContext {
   private static final String PROVISION_CORES_NAME = "cores";
 
   private static final Counter completedOperations =
-      Counter.build().name("completed_operations").help("Completed operations.").register();
+      Counter.builder("completed.operations")
+          .description("Completed operations.")
+          .register(Metrics.globalRegistry);
   private static final Counter operationPollerCounter =
-      Counter.build().name("operation_poller").help("Number of operations polled.").register();
+      Counter.builder("operation.poller")
+          .description("Number of operations polled.")
+          .register(Metrics.globalRegistry);
 
   private static BuildfarmConfigs configs = BuildfarmConfigs.getInstance();
 
@@ -252,7 +257,7 @@ class ShardWorkerContext implements WorkerContext {
                 format("%s: poller: Completed Poll for %s: Failed", name, operationName));
             onFailure.run();
           } else {
-            operationPollerCounter.inc();
+            operationPollerCounter.increment();
             log.log(
                 Level.FINE, format("%s: poller: Completed Poll for %s: OK", name, operationName));
           }
@@ -784,7 +789,7 @@ class ShardWorkerContext implements WorkerContext {
   public boolean putOperation(Operation operation) throws IOException, InterruptedException {
     boolean success = createBackplaneRetrier().execute(() -> instance.putOperation(operation));
     if (success && operation.getDone()) {
-      completedOperations.inc();
+      completedOperations.increment();
       log.log(Level.FINER, "CompletedOperation: " + operation.getName());
     }
     return success;

@@ -42,7 +42,8 @@ import io.grpc.Context;
 import io.grpc.Context.CancellableContext;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-import io.prometheus.client.Histogram;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.Metrics;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -53,12 +54,13 @@ import lombok.extern.java.Log;
 
 @Log
 public class WriteStreamObserver implements StreamObserver<WriteRequest> {
-  private static final Histogram ioMetric =
-      Histogram.build()
-          .name("io_bytes_write")
-          .buckets(new double[] {10, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000})
-          .help("Write I/O (bytes)")
-          .register();
+  private final DistributionSummary ioMetric =
+      DistributionSummary.builder("io.write")
+          .baseUnit("bytes")
+          //          .buckets(new double[] {10, 1000, 10000, 100000, 1000000, 10000000, 100000000,
+          // 1000000000})
+          .description("Write I/O (bytes)")
+          .register(Metrics.globalRegistry);
 
   private final Instance instance;
   private final long deadlineAfter;
@@ -418,7 +420,7 @@ public class WriteStreamObserver implements StreamObserver<WriteRequest> {
     try {
       data.writeTo(getOutput());
       requestNextIfReady();
-      ioMetric.observe(data.size());
+      ioMetric.record(data.size());
     } catch (EntryLimitException e) {
       throw e;
     } catch (IOException e) {

@@ -45,7 +45,8 @@ import io.grpc.netty.NettyServerBuilder;
 import io.grpc.protobuf.services.HealthStatusManager;
 import io.grpc.protobuf.services.ProtoReflectionService;
 import io.grpc.util.TransmitStatusRuntimeExceptionInterceptor;
-import io.prometheus.client.Counter;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Metrics;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -62,12 +63,13 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 public class BuildFarmServer extends LoggingMain {
   private static final java.util.logging.Logger nettyLogger =
       java.util.logging.Logger.getLogger("io.grpc.netty");
-  private static final Counter healthCheckMetric =
-      Counter.build()
-          .name("health_check")
-          .labelNames("lifecycle")
-          .help("Service health check.")
-          .register();
+
+  private static final Counter healthCheckMetric(String lifecycle) {
+    return Counter.builder("health.check")
+        .tag("lifecycle", lifecycle)
+        .description("Service health check.")
+        .register(Metrics.globalRegistry);
+  }
 
   private final ScheduledExecutorService keepaliveScheduler = newSingleThreadScheduledExecutor();
   private Instance instance;
@@ -175,7 +177,7 @@ public class BuildFarmServer extends LoggingMain {
     healthStatusManager.setStatus(
         HealthStatusManager.SERVICE_NAME_ALL_SERVICES, ServingStatus.SERVING);
     PrometheusPublisher.startHttpServer(configs.getPrometheusPort());
-    healthCheckMetric.labels("start").inc();
+    healthCheckMetric("start").increment();
   }
 
   private synchronized void awaitRelease() throws InterruptedException {
@@ -201,7 +203,7 @@ public class BuildFarmServer extends LoggingMain {
           HealthStatusManager.SERVICE_NAME_ALL_SERVICES, ServingStatus.NOT_SERVING);
     }
     PrometheusPublisher.stopHttpServer();
-    healthCheckMetric.labels("stop").inc();
+    healthCheckMetric("stop").increment();
     try {
       initiateShutdown();
       instance.stop();

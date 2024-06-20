@@ -20,12 +20,15 @@ import build.bazel.remote.execution.v2.ServerCapabilities;
 import build.bazel.semver.SemVer;
 import build.buildfarm.instance.Instance;
 import io.grpc.stub.StreamObserver;
-import io.prometheus.client.Counter;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Metrics;
 
 public class CapabilitiesService extends CapabilitiesGrpc.CapabilitiesImplBase {
   // Prometheus metrics
-  private static final Counter numberOfRemoteInvocations =
-      Counter.build().name("remote_invocations").help("Number of remote invocations.").register();
+  private final Counter numberOfRemoteInvocations =
+      Counter.builder("remote.invocations")
+          .description("Number of remote invocations.")
+          .register(Metrics.globalRegistry);
 
   private final Instance instance;
 
@@ -36,7 +39,7 @@ public class CapabilitiesService extends CapabilitiesGrpc.CapabilitiesImplBase {
   @Override
   public void getCapabilities(
       GetCapabilitiesRequest request, StreamObserver<ServerCapabilities> responseObserver) {
-    numberOfRemoteInvocations.inc();
+    numberOfRemoteInvocations.increment();
     responseObserver.onNext(
         instance.getCapabilities().toBuilder()
             .setLowApiVersion(SemVer.newBuilder().setMajor(2))
