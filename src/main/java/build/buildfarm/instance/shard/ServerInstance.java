@@ -975,7 +975,7 @@ public class ServerInstance extends NodeInstance {
               public void onNext(ByteString nextChunk) {
                 blobObserver.onNext(nextChunk);
                 received += nextChunk.size();
-                ioMetric.observe(nextChunk.size());
+                //                ioMetric.observe(nextChunk.size()); // TODO
               }
 
               @Override
