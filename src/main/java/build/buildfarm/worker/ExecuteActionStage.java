@@ -36,7 +36,7 @@ public class ExecuteActionStage extends SuperscalarPipelineStage {
   private final BlockingQueue<OperationContext> queue = new ArrayBlockingQueue<>(1);
 
   private final Gauge executionSlotUsage =
-      Gauge.builder("execution.slot.usage", () -> executorClaims.get())
+      Gauge.builder("execution.usage", executorClaims::get)
           .baseUnit("slots")
           .description("Execution slot Usage.")
           .register(Metrics.globalRegistry);

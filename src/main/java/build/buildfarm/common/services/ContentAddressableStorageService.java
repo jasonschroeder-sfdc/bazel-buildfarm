@@ -62,7 +62,7 @@ public class ContentAddressableStorageService
   private static final DistributionSummary missingBlobs =
       DistributionSummary.builder("missing.blobs")
           .baseUnit("blobs")
-          .description("Find missing blobs.")
+          .description("Find missing blobs. Represents how many blobs are in the request.")
           .register(Metrics.globalRegistry);
 
   private final Instance instance;

@@ -147,7 +147,7 @@ import org.json.simple.JSONObject;
 public abstract class CASFileCache implements ContentAddressableStorage {
   // Metrics
   private final Counter expiredKeyCounter =
-      Counter.builder("expired.key")
+      Counter.builder("expired")
           .description("Number of key expirations.")
           .baseUnit("keys")
           .register(Metrics.globalRegistry);
@@ -157,7 +157,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
           .description("CAS size.")
           .register(Metrics.globalRegistry);
   private final Gauge casEntryCountMetric =
-      Gauge.builder("cas.entry.count", this::entryCount)
+      Gauge.builder("cas.entry", this::entryCount)
           .description("Number of entries in the CAS.")
           .baseUnit(BaseUnits.OBJECTS)
           .register(Metrics.globalRegistry);

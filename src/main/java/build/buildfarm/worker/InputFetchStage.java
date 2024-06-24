@@ -32,7 +32,7 @@ public class InputFetchStage extends SuperscalarPipelineStage {
   private final BlockingQueue<OperationContext> queue = new ArrayBlockingQueue<>(1);
 
   private final Gauge inputFetchSlotUsage =
-      Gauge.builder("input.fetch.slot.usage", this::getSlotUsage)
+      Gauge.builder("input.fetch.usage", this::getSlotUsage)
           .description("Input fetch slot Usage.")
           .baseUnit("slots")
           .register(Metrics.globalRegistry);
