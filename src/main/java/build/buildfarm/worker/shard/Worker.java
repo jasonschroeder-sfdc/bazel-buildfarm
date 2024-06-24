@@ -95,6 +95,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import javax.annotation.Nullable;
 import javax.naming.ConfigurationException;
+
+import io.micrometer.core.instrument.binder.BaseUnits;
 import lombok.extern.java.Log;
 
 @Log
@@ -592,6 +594,7 @@ public final class Worker extends LoggingMain {
     // https://docs.micrometer.io/micrometer/reference/reference/commons-pool.html
     Gauge.builder("zstd.buffer.pool", zstdBufferPool::getNumActive)
         .description("Current number of Zstd decompression buffers active")
+        .baseUnit(BaseUnits.BUFFERS)
         .register(Metrics.globalRegistry);
 
     InputStreamFactory remoteInputStreamFactory =

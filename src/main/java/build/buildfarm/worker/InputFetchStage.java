@@ -34,6 +34,7 @@ public class InputFetchStage extends SuperscalarPipelineStage {
   private final Gauge inputFetchSlotUsage =
       Gauge.builder("input.fetch.slot.usage", this::getSlotUsage)
           .description("Input fetch slot Usage.")
+          .baseUnit("slots")
           .register(Metrics.globalRegistry);
   private final Timer inputFetchTime =
       Timer.builder("input.fetch").description("Input fetch").register(Metrics.globalRegistry);

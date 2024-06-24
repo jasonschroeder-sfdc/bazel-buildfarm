@@ -96,6 +96,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Metrics;
+import io.micrometer.core.instrument.binder.BaseUnits;
 import io.micrometer.observation.Observation;
 import io.netty.handler.codec.http.QueryStringDecoder;
 import java.io.FilterOutputStream;
@@ -148,15 +149,17 @@ public abstract class CASFileCache implements ContentAddressableStorage {
   private final Counter expiredKeyCounter =
       Counter.builder("expired.key")
           .description("Number of key expirations.")
+          .baseUnit("keys")
           .register(Metrics.globalRegistry);
   private final Gauge casSizeMetric =
       Gauge.builder("cas.size", this::size)
-          .baseUnit("bytes")
+          .baseUnit(BaseUnits.BYTES)
           .description("CAS size.")
           .register(Metrics.globalRegistry);
   private final Gauge casEntryCountMetric =
       Gauge.builder("cas.entry.count", this::entryCount)
           .description("Number of entries in the CAS.")
+          .baseUnit(BaseUnits.OBJECTS)
           .register(Metrics.globalRegistry);
   private final DistributionSummary casTtl =
       DistributionSummary.builder("cas.ttl")
@@ -168,9 +171,12 @@ public abstract class CASFileCache implements ContentAddressableStorage {
 
       Counter.builder("cas.copy.fallback")
           .description("Number of times the CAS performed a file copy because hardlinking failed")
+          .baseUnit(BaseUnits.EVENTS)
           .register(Metrics.globalRegistry);
   private static final Counter readIOErrors =
-      Counter.builder("read.io.errors").description("Number of IO errors on read.").register(Metrics.globalRegistry);
+      Counter.builder("read.io.errors").description("Number of IO errors on read.")
+          .baseUnit(BaseUnits.EVENTS).
+          register(Metrics.globalRegistry);
 
 
   protected static final String DEFAULT_DIRECTORIES_INDEX_NAME = "directories.sqlite";
