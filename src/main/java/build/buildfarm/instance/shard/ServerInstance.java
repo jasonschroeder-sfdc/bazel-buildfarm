@@ -168,6 +168,8 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import javax.naming.ConfigurationException;
+
+import io.micrometer.core.instrument.binder.BaseUnits;
 import lombok.extern.java.Log;
 
 @Log
@@ -188,52 +190,60 @@ public class ServerInstance extends NodeInstance {
   private final Gauge preQueueSize =
       Gauge.builder("pre.queue.size", () -> backplaneStatus().getPrequeue().getSize())
           .description("Pre queue size.")
+          .baseUnit(BaseUnits.TASKS)
           .register(Metrics.globalRegistry);
+  // These are CAS Hit/Fail(MissingBlob) metrics.
   private static final Counter casHitCounter =
       Counter.builder("cas.hit")
-          .description("Number of successful CAS hits from worker-worker.")
+          .description("Number of successful CAS hits")
+          .baseUnit(BaseUnits.EVENTS)
           .register(Metrics.globalRegistry);
   private static final Counter casMissCounter =
       Counter.builder("cas.miss")
-          .description("Number of CAS misses from worker-worker.")
+          .description("Number of CAS misses")
+          .baseUnit(BaseUnits.EVENTS)
           .register(Metrics.globalRegistry);
+  private final Counter casHitBytesCounter =
+          Counter.builder("cas.read")
+                  .description("Bytes read through the CAS")
+                  .baseUnit(BaseUnits.BYTES)
+                  .register(Metrics.globalRegistry);
   private static final Counter requeueFailureCounter =
       Counter.builder("requeue.failure")
           .description("Number of operations that failed to requeue.")
+          .baseUnit(BaseUnits.EVENTS)
           .register(Metrics.globalRegistry);
   private static final Counter queueFailureCounter =
       Counter.builder("queue.failure")
           .description("Number of operations that failed to queue.")
+          .baseUnit(BaseUnits.EVENTS)
           .register(Metrics.globalRegistry);
   // Metrics about the dispatched operations
   private final Gauge dispatchedOperationsSize =
       Gauge.builder("dispatched.operations", () -> backplaneStatus().getDispatchedSize())
           .description("Dispatched operations size.")
+          .baseUnit(BaseUnits.OPERATIONS)
           .register(Metrics.globalRegistry);
 
   // Other metrics from the backplane
   private final Gauge workerPoolSize =
       Gauge.builder("worker.pool", () -> backplaneStatus().getActiveWorkersCount())
           .description("Active worker pool size.")
+          .baseUnit(BaseUnits.CONNECTIONS)
           .register(Metrics.globalRegistry);
   private final Gauge storageWorkerPoolSize =
       Gauge.builder(
-              "storage_worker_pool_size", () -> backplaneStatus().getActiveStorageWorkersCount())
+              "worker.storage.pool", () -> backplaneStatus().getActiveStorageWorkersCount())
           .description("Active storage worker pool size.")
+          .baseUnit(BaseUnits.CONNECTIONS)
           .register(Metrics.globalRegistry);
   private final Gauge executeWorkerPoolSize =
       Gauge.builder(
-              "execute_worker_pool_size", () -> backplaneStatus().getActiveStorageWorkersCount())
+              "worker.execute.pool", () -> backplaneStatus().getActiveStorageWorkersCount())
           .description("Active execute worker pool size.")
+          .baseUnit(BaseUnits.CONNECTIONS)
           .register(Metrics.globalRegistry);
 
-  //  private static final Histogram ioMetric =
-  //      Histogram.build()
-  //          .name("io_bytes_read")
-  //          .buckets(new double[] {10, 1000, 10000, 100000, 1000000, 10000000, 100000000,
-  // 1000000000})
-  //          .help("Read I/O (bytes)")
-  //          .register(Metrics.globalRegistry);
 
   private final Runnable onStop;
   private final long maxEntrySizeBytes;
@@ -975,7 +985,7 @@ public class ServerInstance extends NodeInstance {
               public void onNext(ByteString nextChunk) {
                 blobObserver.onNext(nextChunk);
                 received += nextChunk.size();
-                //                ioMetric.observe(nextChunk.size()); // TODO
+                casHitBytesCounter.increment(nextChunk.size());
               }
 
               @Override
