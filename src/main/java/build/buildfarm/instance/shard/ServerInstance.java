@@ -563,20 +563,19 @@ public class ServerInstance extends NodeInstance {
     } else {
       operationQueuer = null;
     }
-  }
 
-  private void updateQueueSizes(List<QueueStatus> queues) {
-    //    if (queueSize != null) {
-    //      for (QueueStatus queueStatus : queues) {
-    // # TODO
-    //            Gauge.builder("queue_size").labelNames("queue_name").description("Queue
-    // size.").register(Metrics.globalRegistry);
-
-    //        queueSize
-    //            .labels(RedisHashtags.unhashedName(queueStatus.getName()))
-    //            .set(queueStatus.getSize());
-    //      }
-    //    }
+    /* Create Gauges per each queue name */
+    List<QueueStatus> queues = backplaneStatus().getOperationQueue().getProvisionsList();
+    for(QueueStatus queue : queues) {
+      // TODO this will cost O(n) calls to backplaneStatus(), where n is the number of queues.
+      // Consider buffering backplaneStatus() for a few seconds.
+      Gauge.builder("queue.size",
+              () -> backplaneStatus().getOperationQueue().getProvisionsList().stream().filter(q -> q.getName().equals(queue.getName())).findFirst().get().getSize())
+              .tag("queue.name", queue.getName())
+              .description("Queue size of Operations")
+              .baseUnit(BaseUnits.TASKS)
+              .register(Metrics.globalRegistry);
+    }
   }
 
   private void ensureCanQueue(Stopwatch stopwatch) throws IOException, InterruptedException {
