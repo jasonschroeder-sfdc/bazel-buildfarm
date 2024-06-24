@@ -46,6 +46,7 @@ import io.grpc.protobuf.services.HealthStatusManager;
 import io.grpc.protobuf.services.ProtoReflectionService;
 import io.grpc.util.TransmitStatusRuntimeExceptionInterceptor;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Metrics;
 import java.io.File;
 import java.io.IOException;
@@ -56,6 +57,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.naming.ConfigurationException;
+
+import io.micrometer.core.instrument.binder.commonspool2.CommonsObjectPool2Metrics;
 import lombok.extern.java.Log;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
@@ -173,6 +176,15 @@ public class BuildFarmServer extends LoggingMain {
 
     instance.start(publicName);
     server.start();
+    /* Create Micrometer observers for all Commons Pool objects */
+    /* We're specifically interested in the Jedis connection pool. */
+    /* Metrics will have tags like this:
+      {factoryType="redis.clients.jedis.ConnectionFactory<redis.clients.jedis.Connection>",name="pool",type="GenericObjectPool"}
+     */
+    try (CommonsObjectPool2Metrics commonsObjectPool2Metrics = new CommonsObjectPool2Metrics()) {
+      commonsObjectPool2Metrics.bindTo(Metrics.globalRegistry);
+    }
+
 
     healthStatusManager.setStatus(
         HealthStatusManager.SERVICE_NAME_ALL_SERVICES, ServingStatus.SERVING);
