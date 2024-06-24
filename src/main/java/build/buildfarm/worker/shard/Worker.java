@@ -97,6 +97,7 @@ import javax.annotation.Nullable;
 import javax.naming.ConfigurationException;
 
 import io.micrometer.core.instrument.binder.BaseUnits;
+import io.micrometer.core.instrument.binder.commonspool2.CommonsObjectPool2Metrics;
 import lombok.extern.java.Log;
 
 @Log
@@ -590,12 +591,10 @@ public final class Worker extends LoggingMain {
     ExecutorService fetchService = BuildfarmExecutors.getFetchServicePool();
     FixedBufferPool zstdBufferPool =
         new FixedBufferPool(configs.getWorker().getZstdBufferPoolSize());
-    // TODO(jschroeder) move to
-    // https://docs.micrometer.io/micrometer/reference/reference/commons-pool.html
-    Gauge.builder("zstd.buffer.pool", zstdBufferPool::getNumActive)
-        .description("Current number of Zstd decompression buffers active")
-        .baseUnit(BaseUnits.BUFFERS)
-        .register(Metrics.globalRegistry);
+    try (CommonsObjectPool2Metrics commonsObjectPool2Metrics = new CommonsObjectPool2Metrics()) {
+      // Provide micrometer metrics for zstdbufferPool
+      commonsObjectPool2Metrics.bindTo(Metrics.globalRegistry);
+    }
 
     InputStreamFactory remoteInputStreamFactory =
         new RemoteInputStreamFactory(
