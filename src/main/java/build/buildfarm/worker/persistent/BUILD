@@ -24,8 +24,6 @@ java_library(
         "@maven//:io_grpc_grpc_netty",
         "@maven//:io_grpc_grpc_protobuf",
         "@maven//:io_grpc_grpc_stub",
-        "@maven//:io_opentelemetry_opentelemetry_api",
-        "@maven//:io_opentelemetry_opentelemetry_context",
         "@maven//:org_apache_commons_commons_compress",
         "@maven//:org_jetbrains_annotations",
         "@maven//:org_projectlombok_lombok",

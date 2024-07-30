@@ -15,7 +15,6 @@ java_library(
         "//src/main/java/build/buildfarm/common/blake3",
         "//src/main/java/build/buildfarm/common/resources",
         "//src/main/java/build/buildfarm/common/resources:resource_java_proto",
-        "//src/main/java/build/buildfarm/metrics/observation",
         "//src/main/protobuf:build_buildfarm_v1test_buildfarm_java_proto",
         "@com_google_googleapis//google/longrunning:longrunning_java_proto",
         "@com_google_googleapis//google/rpc:rpc_java_proto",
