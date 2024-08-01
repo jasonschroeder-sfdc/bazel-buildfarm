@@ -30,7 +30,7 @@ public class TimeTest {
     Timestamp t2 = Timestamp.newBuilder().setSeconds(t1.getSeconds() + 120).setNanos(200).build();
     // t2 is 60sec+100ns after t1.
     // The result is rounded to the nearest millisecond.
-    assertThat(Time.toDurationMs(t1, t2)).isEqualTo(120000.0);
+    assertThat(Time.toDurationMs(t1, t2)).isEqualTo(120000);
   }
 
   @Test
@@ -61,7 +61,7 @@ public class TimeTest {
             .build(); // 200 nanoseconds short of a full second.
     Timestamp t2 = Timestamp.newBuilder().setSeconds(125).setNanos(0).build();
     // The result is rounded to the nearest millisecond.
-    assertThat(Time.toDurationMs(t1, t2)).isEqualTo(1000.0);
+    assertThat(Time.toDurationMs(t1, t2)).isEqualTo(1000);
   }
 
   @Test
