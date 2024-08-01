@@ -20,7 +20,6 @@ import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkRequest;
 import com.google.devtools.build.lib.worker.WorkerProtocol.WorkResponse;
 import com.google.protobuf.Duration;
-import io.prometheus.client.Gauge;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -71,20 +70,6 @@ public class ProtoCoordinator extends WorkCoordinator<RequestCtx, ResponseCtx, C
 
   private ProtoCoordinator(WorkerSupervisor supervisor, int maxWorkersPerKey) {
     super(new CommonsWorkerPool(supervisor, maxWorkersPerKey));
-
-    Gauge.build()
-        .name("persistent_workers")
-        .help("Number of persistent workers in the pool")
-        .create()
-        .setChild(
-            new Gauge.Child() {
-              @Override
-              public double get() {
-                return workerPool.getNumActive();
-              }
-            },
-            "active")
-        .register();
   }
 
   // We copy tool inputs from the shared WorkerKey tools directory into our worker exec root,
