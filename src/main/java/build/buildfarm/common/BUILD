@@ -13,6 +13,7 @@ java_library(
     visibility = ["//visibility:public"],
     deps = [
         "//src/main/java/build/buildfarm/common/blake3",
+        "//src/main/java/build/buildfarm/common/resources",
         "//src/main/java/build/buildfarm/common/resources:resource_java_proto",
         "//src/main/protobuf:build_buildfarm_v1test_buildfarm_java_proto",
         "@googleapis//google/longrunning:longrunning_java_proto",
@@ -35,9 +36,9 @@ java_library(
         "@maven//:org_apache_commons_commons_compress",
         "@maven//:org_apache_commons_commons_pool2",
         "@maven//:org_projectlombok_lombok",
+        "@maven//:org_slf4j_jul_to_slf4j",
         "@maven//:org_threeten_threetenbp",
         "@maven//:redis_clients_jedis",
-        "@maven//:org_slf4j_jul_to_slf4j",
         "@remoteapis//build/bazel/remote/execution/v2:remote_execution_java_proto",
     ],
 )

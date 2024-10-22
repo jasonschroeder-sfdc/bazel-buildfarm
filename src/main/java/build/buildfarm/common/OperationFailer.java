@@ -18,7 +18,6 @@ import build.bazel.remote.execution.v2.ExecuteOperationMetadata;
 import build.bazel.remote.execution.v2.ExecuteResponse;
 import build.bazel.remote.execution.v2.ExecutedActionMetadata;
 import build.bazel.remote.execution.v2.ExecutionStage;
-import build.buildfarm.v1test.Digest;
 import build.buildfarm.v1test.ExecuteEntry;
 import com.google.longrunning.Operation;
 import com.google.protobuf.Any;
@@ -51,9 +50,8 @@ public class OperationFailer {
       ExecuteEntry executeEntry,
       ExecutedActionMetadata partialExecutionMetadata,
       ExecutionStage.Value stage) {
-    Digest actionDigest = executeEntry.getActionDigest();
     return ExecuteOperationMetadata.newBuilder()
-        .setActionDigest(DigestUtil.toDigest(actionDigest))
+        .setActionDigest(executeEntry.getActionDigest())
         .setStdoutStreamName(executeEntry.getStdoutStreamName())
         .setStderrStreamName(executeEntry.getStderrStreamName())
         .setStage(stage)

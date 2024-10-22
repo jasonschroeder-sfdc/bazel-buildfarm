@@ -18,6 +18,7 @@ import static build.buildfarm.common.grpc.Channels.createChannel;
 
 import build.bazel.remote.execution.v2.ActionResult;
 import build.buildfarm.common.DigestUtil;
+import build.buildfarm.common.DigestUtil.HashFunction;
 import build.buildfarm.instance.Instance;
 import build.buildfarm.instance.stub.StubInstance;
 import com.google.protobuf.ByteString;
@@ -34,11 +35,12 @@ class Ac {
 
     // create instance
     ManagedChannel channel = createChannel(host);
-    Instance instance = new StubInstance(instanceName, channel);
+    Instance instance = new StubInstance(instanceName, digestUtil, channel);
 
     // upload fake data to the Action Cache.
+    DigestUtil hash = new DigestUtil(HashFunction.SHA256);
     DigestUtil.ActionKey key =
-        DigestUtil.asActionKey(digestUtil.compute(ByteString.copyFromUtf8("Hello, World")));
+        DigestUtil.asActionKey(hash.compute(ByteString.copyFromUtf8("Hello, World")));
     ActionResult.Builder result = ActionResult.newBuilder();
     instance.putActionResult(key, result.build());
 

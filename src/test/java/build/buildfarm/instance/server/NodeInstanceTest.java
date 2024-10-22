@@ -38,6 +38,7 @@ import static org.mockito.Mockito.when;
 import build.bazel.remote.execution.v2.ActionResult;
 import build.bazel.remote.execution.v2.Command;
 import build.bazel.remote.execution.v2.Compressor;
+import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Directory;
 import build.bazel.remote.execution.v2.DirectoryNode;
 import build.bazel.remote.execution.v2.ExecutionPolicy;
@@ -61,7 +62,6 @@ import build.buildfarm.common.Write.WriteCompleteException;
 import build.buildfarm.common.io.FeedbackOutputStream;
 import build.buildfarm.common.net.URL;
 import build.buildfarm.v1test.BackplaneStatus;
-import build.buildfarm.v1test.Digest;
 import build.buildfarm.v1test.GetClientStartTimeRequest;
 import build.buildfarm.v1test.GetClientStartTimeResult;
 import build.buildfarm.v1test.PrepareWorkerForGracefulShutDownRequestResults;
@@ -105,6 +105,7 @@ public class NodeInstanceTest {
         ContentAddressableStorage contentAddressableStorage, ActionCache actionCache) {
       super(
           /* name= */ null,
+          /* digestUtil= */ DIGEST_UTIL,
           contentAddressableStorage,
           actionCache,
           /* outstandingOperations= */ null,
@@ -235,7 +236,6 @@ public class NodeInstanceTest {
   public void duplicateFileInputIsInvalid() {
     PreconditionFailure.Builder preconditionFailure = PreconditionFailure.newBuilder();
     NodeInstance.validateActionInputDirectory(
-        DIGEST_UTIL.getDigestFunction(),
         ACTION_INPUT_ROOT_DIRECTORY_PATH,
         Directory.newBuilder()
             .addAllFiles(
@@ -265,24 +265,22 @@ public class NodeInstanceTest {
     Digest emptyDirectoryDigest = DIGEST_UTIL.compute(emptyDirectory);
     PreconditionFailure.Builder preconditionFailure = PreconditionFailure.newBuilder();
     NodeInstance.validateActionInputDirectory(
-        DIGEST_UTIL.getDigestFunction(),
         ACTION_INPUT_ROOT_DIRECTORY_PATH,
         Directory.newBuilder()
             .addAllDirectories(
                 ImmutableList.of(
                     DirectoryNode.newBuilder()
                         .setName("bar")
-                        .setDigest(DigestUtil.toDigest(emptyDirectoryDigest))
+                        .setDigest(emptyDirectoryDigest)
                         .build(),
                     DirectoryNode.newBuilder()
                         .setName("foo")
-                        .setDigest(DigestUtil.toDigest(emptyDirectoryDigest))
+                        .setDigest(emptyDirectoryDigest)
                         .build()))
             .build(),
         /* pathDigests= */ new Stack<>(),
         /* visited= */ Sets.newHashSet(),
-        /* directoriesIndex= */ ImmutableMap.of(
-            build.bazel.remote.execution.v2.Digest.getDefaultInstance(), emptyDirectory),
+        /* directoriesIndex= */ ImmutableMap.of(Digest.getDefaultInstance(), emptyDirectory),
         /* allowSymlinkTargetAbsolute= */ false,
         /* onInputFiles= */ file -> {},
         /* onInputDirectories= */ directory -> {},
@@ -297,7 +295,6 @@ public class NodeInstanceTest {
   public void unsortedFileInputIsInvalid() {
     PreconditionFailure.Builder preconditionFailure = PreconditionFailure.newBuilder();
     NodeInstance.validateActionInputDirectory(
-        DIGEST_UTIL.getDigestFunction(),
         ACTION_INPUT_ROOT_DIRECTORY_PATH,
         Directory.newBuilder()
             .addAllFiles(
@@ -327,24 +324,22 @@ public class NodeInstanceTest {
     Digest emptyDirectoryDigest = DIGEST_UTIL.compute(emptyDirectory);
     PreconditionFailure.Builder preconditionFailure = PreconditionFailure.newBuilder();
     NodeInstance.validateActionInputDirectory(
-        DIGEST_UTIL.getDigestFunction(),
         ACTION_INPUT_ROOT_DIRECTORY_PATH,
         Directory.newBuilder()
             .addAllDirectories(
                 ImmutableList.of(
                     DirectoryNode.newBuilder()
                         .setName("foo")
-                        .setDigest(DigestUtil.toDigest(emptyDirectoryDigest))
+                        .setDigest(emptyDirectoryDigest)
                         .build(),
                     DirectoryNode.newBuilder()
                         .setName("foo")
-                        .setDigest(DigestUtil.toDigest(emptyDirectoryDigest))
+                        .setDigest(emptyDirectoryDigest)
                         .build()))
             .build(),
         /* pathDigests= */ new Stack<>(),
         /* visited= */ Sets.newHashSet(),
-        /* directoriesIndex= */ ImmutableMap.of(
-            DigestUtil.toDigest(emptyDirectoryDigest), emptyDirectory),
+        /* directoriesIndex= */ ImmutableMap.of(emptyDirectoryDigest, emptyDirectory),
         /* allowSymlinkTargetAbsolute= */ false,
         /* onInputFiles= */ file -> {},
         /* onInputDirectories= */ directory -> {},
@@ -364,24 +359,22 @@ public class NodeInstanceTest {
     Digest emptyDirectoryDigest = DIGEST_UTIL.compute(emptyDirectory);
     PreconditionFailure.Builder preconditionFailure = PreconditionFailure.newBuilder();
     NodeInstance.validateActionInputDirectory(
-        DIGEST_UTIL.getDigestFunction(),
         ACTION_INPUT_ROOT_DIRECTORY_PATH,
         Directory.newBuilder()
             .addAllDirectories(
                 ImmutableList.of(
                     DirectoryNode.newBuilder()
                         .setName("foo")
-                        .setDigest(DigestUtil.toDigest(emptyDirectoryDigest))
+                        .setDigest(emptyDirectoryDigest)
                         .build(),
                     DirectoryNode.newBuilder()
                         .setName("bar")
-                        .setDigest(DigestUtil.toDigest(emptyDirectoryDigest))
+                        .setDigest(emptyDirectoryDigest)
                         .build()))
             .build(),
         /* pathDigests= */ new Stack<>(),
         /* visited= */ Sets.newHashSet(),
-        /* directoriesIndex= */ ImmutableMap.of(
-            DigestUtil.toDigest(emptyDirectoryDigest), emptyDirectory),
+        /* directoriesIndex= */ ImmutableMap.of(emptyDirectoryDigest, emptyDirectory),
         /* allowSymlinkTargetAbsolute= */ false,
         /* onInputFiles= */ file -> {},
         /* onInputDirectories= */ directory -> {},
@@ -404,7 +397,6 @@ public class NodeInstanceTest {
             .addSymlinks(SymlinkNode.newBuilder().setName("foo").setTarget("/root/secret").build())
             .build();
     NodeInstance.validateActionInputDirectory(
-        DIGEST_UTIL.getDigestFunction(),
         ACTION_INPUT_ROOT_DIRECTORY_PATH,
         absoluteSymlinkDirectory,
         /* pathDigests= */ new Stack<>(),
@@ -425,7 +417,6 @@ public class NodeInstanceTest {
     // valid for allowed
     preconditionFailure = PreconditionFailure.newBuilder();
     NodeInstance.validateActionInputDirectory(
-        DIGEST_UTIL.getDigestFunction(),
         ACTION_INPUT_ROOT_DIRECTORY_PATH,
         absoluteSymlinkDirectory,
         /* pathDigests= */ new Stack<>(),
@@ -497,7 +488,7 @@ public class NodeInstanceTest {
     PreconditionFailure.Builder preconditionFailureBuilder = PreconditionFailure.newBuilder();
     instance.validateCommand(
         Command.getDefaultInstance(),
-        DigestUtil.toDigest(DIGEST_UTIL.empty()),
+        DIGEST_UTIL.empty(),
         ImmutableSet.of(),
         ImmutableSet.of(),
         ImmutableMap.of(),
@@ -517,7 +508,7 @@ public class NodeInstanceTest {
     PreconditionFailure.Builder preconditionFailureBuilder = PreconditionFailure.newBuilder();
     instance.validateCommand(
         Command.newBuilder().addArguments("foo").setWorkingDirectory("/var/lib/db").build(),
-        DigestUtil.toDigest(DIGEST_UTIL.empty()),
+        DIGEST_UTIL.empty(),
         ImmutableSet.of(),
         ImmutableSet.of(),
         ImmutableMap.of(),
@@ -538,10 +529,10 @@ public class NodeInstanceTest {
     PreconditionFailure.Builder preconditionFailureBuilder = PreconditionFailure.newBuilder();
     instance.validateCommand(
         Command.newBuilder().addArguments("foo").setWorkingDirectory("not/an/input").build(),
-        DigestUtil.toDigest(inputRootDigest),
+        inputRootDigest,
         ImmutableSet.of(),
         ImmutableSet.of(),
-        ImmutableMap.of(DigestUtil.toDigest(inputRootDigest), Directory.getDefaultInstance()),
+        ImmutableMap.of(inputRootDigest, Directory.getDefaultInstance()),
         preconditionFailureBuilder);
     PreconditionFailure preconditionFailure = preconditionFailureBuilder.build();
     assertThat(preconditionFailure.getViolationsCount()).isEqualTo(1);
@@ -558,7 +549,7 @@ public class NodeInstanceTest {
    */
   @Test
   public void multipleIdenticalDirectoryMissingAreAllPreconditionFailures() {
-    Digest missingDirectoryDigest = Digest.newBuilder().setHash("missing").setSize(1).build();
+    Digest missingDirectoryDigest = Digest.newBuilder().setHash("missing").setSizeBytes(1).build();
     PreconditionFailure.Builder preconditionFailure = PreconditionFailure.newBuilder();
     Directory root =
         Directory.newBuilder()
@@ -566,15 +557,14 @@ public class NodeInstanceTest {
                 ImmutableList.of(
                     DirectoryNode.newBuilder()
                         .setName("bar")
-                        .setDigest(DigestUtil.toDigest(missingDirectoryDigest))
+                        .setDigest(missingDirectoryDigest)
                         .build(),
                     DirectoryNode.newBuilder()
                         .setName("foo")
-                        .setDigest(DigestUtil.toDigest(missingDirectoryDigest))
+                        .setDigest(missingDirectoryDigest)
                         .build()))
             .build();
     NodeInstance.validateActionInputDirectory(
-        DIGEST_UTIL.getDigestFunction(),
         ACTION_INPUT_ROOT_DIRECTORY_PATH,
         root,
         /* pathDigests= */ new Stack<>(),
@@ -613,18 +603,18 @@ public class NodeInstanceTest {
   @Test
   public void validationRevisitReplicatesPreconditionFailures() {
     Digest missingEmptyDirectoryDigest = Digest.newBuilder().setHash("missing-empty").build();
-    Digest missingDirectoryDigest = Digest.newBuilder().setHash("missing").setSize(1).build();
+    Digest missingDirectoryDigest = Digest.newBuilder().setHash("missing").setSizeBytes(1).build();
     Directory foo =
         Directory.newBuilder()
             .addAllDirectories(
                 ImmutableList.of(
                     DirectoryNode.newBuilder()
                         .setName("baz")
-                        .setDigest(DigestUtil.toDigest(missingEmptyDirectoryDigest))
+                        .setDigest(missingEmptyDirectoryDigest)
                         .build(),
                     DirectoryNode.newBuilder()
                         .setName("quux")
-                        .setDigest(DigestUtil.toDigest(missingDirectoryDigest))
+                        .setDigest(missingDirectoryDigest)
                         .build()))
             .build();
     Digest fooDigest = DIGEST_UTIL.compute(foo);
@@ -633,22 +623,15 @@ public class NodeInstanceTest {
         Directory.newBuilder()
             .addAllDirectories(
                 ImmutableList.of(
-                    DirectoryNode.newBuilder()
-                        .setName("bar")
-                        .setDigest(DigestUtil.toDigest(fooDigest))
-                        .build(),
-                    DirectoryNode.newBuilder()
-                        .setName("foo")
-                        .setDigest(DigestUtil.toDigest(fooDigest))
-                        .build()))
+                    DirectoryNode.newBuilder().setName("bar").setDigest(fooDigest).build(),
+                    DirectoryNode.newBuilder().setName("foo").setDigest(fooDigest).build()))
             .build();
     NodeInstance.validateActionInputDirectory(
-        DIGEST_UTIL.getDigestFunction(),
         ACTION_INPUT_ROOT_DIRECTORY_PATH,
         root,
         /* pathDigests= */ new Stack<>(),
         /* visited= */ Sets.newHashSet(),
-        /* directoriesIndex= */ ImmutableMap.of(DigestUtil.toDigest(fooDigest), foo),
+        /* directoriesIndex= */ ImmutableMap.of(fooDigest, foo),
         /* allowSymlinkTargetAbsolute= */ false,
         /* onInputFiles= */ file -> {},
         /* onInputDirectories= */ directory -> {},
@@ -688,7 +671,7 @@ public class NodeInstanceTest {
             eq(Compressor.Value.IDENTITY),
             eq(digest),
             /* offset= */ eq(0L),
-            eq(digest.getSize()),
+            eq(digest.getSizeBytes()),
             any(ServerCallStreamObserver.class),
             eq(requestMetadata));
   }
@@ -697,15 +680,12 @@ public class NodeInstanceTest {
   @Test
   public void outputDirectoriesFilesAreEnsuredPresent() throws Exception {
     // our test subjects - these should appear in the findMissingBlobs request
-    build.bazel.remote.execution.v2.Digest fileDigest =
-        DigestUtil.toDigest(
-            DIGEST_UTIL.compute(ByteString.copyFromUtf8("Output Directory Root File Content")));
-    build.bazel.remote.execution.v2.Digest childFileDigest =
-        DigestUtil.toDigest(
-            DIGEST_UTIL.compute(ByteString.copyFromUtf8("Output Directory Child File Content")));
-    build.bazel.remote.execution.v2.Digest otherFileDigest =
-        DigestUtil.toDigest(
-            DIGEST_UTIL.compute(ByteString.copyFromUtf8("Another Output Directory File Content")));
+    Digest fileDigest =
+        DIGEST_UTIL.compute(ByteString.copyFromUtf8("Output Directory Root File Content"));
+    Digest childFileDigest =
+        DIGEST_UTIL.compute(ByteString.copyFromUtf8("Output Directory Child File Content"));
+    Digest otherFileDigest =
+        DIGEST_UTIL.compute(ByteString.copyFromUtf8("Another Output Directory File Content"));
 
     // setup block and ensureOutputsPresent trigger
     RequestMetadata requestMetadata =
@@ -743,12 +723,9 @@ public class NodeInstanceTest {
         DigestUtil.asActionKey(DIGEST_UTIL.compute(ByteString.copyFromUtf8("action")));
     ActionResult actionResult =
         ActionResult.newBuilder()
+            .addOutputDirectories(OutputDirectory.newBuilder().setTreeDigest(treeDigest).build())
             .addOutputDirectories(
-                OutputDirectory.newBuilder().setTreeDigest(DigestUtil.toDigest(treeDigest)).build())
-            .addOutputDirectories(
-                OutputDirectory.newBuilder()
-                    .setTreeDigest(DigestUtil.toDigest(otherTreeDigest))
-                    .build())
+                OutputDirectory.newBuilder().setTreeDigest(otherTreeDigest).build())
             .build();
     when(actionCache.get(actionKey)).thenReturn(immediateFuture(actionResult));
 
@@ -756,18 +733,17 @@ public class NodeInstanceTest {
     assertThat(instance.getActionResult(actionKey, requestMetadata).get()).isEqualTo(actionResult);
 
     // validation
-    ArgumentCaptor<Iterable<build.bazel.remote.execution.v2.Digest>> findMissingBlobsCaptor =
+    ArgumentCaptor<Iterable<Digest>> findMissingBlobsCaptor =
         ArgumentCaptor.forClass(Iterable.class);
     verify(contentAddressableStorage, times(1))
         .get(
             eq(Compressor.Value.IDENTITY),
             eq(treeDigest),
             /* offset= */ eq(0L),
-            eq(treeDigest.getSize()),
+            eq(treeDigest.getSizeBytes()),
             any(ServerCallStreamObserver.class),
             eq(requestMetadata));
-    verify(contentAddressableStorage, times(1))
-        .findMissingBlobs(findMissingBlobsCaptor.capture(), eq(treeDigest.getDigestFunction()));
+    verify(contentAddressableStorage, times(1)).findMissingBlobs(findMissingBlobsCaptor.capture());
     assertThat(findMissingBlobsCaptor.getValue())
         .containsAtLeast(fileDigest, childFileDigest, otherFileDigest);
   }
@@ -776,7 +752,7 @@ public class NodeInstanceTest {
   public void fetchBlobWriteCompleteIsSuccess() throws Exception {
     ByteString content = ByteString.copyFromUtf8("Fetch Blob Content");
     Digest contentDigest = DIGEST_UTIL.compute(content);
-    Digest expectedDigest = contentDigest.toBuilder().setSize(-1).build();
+    Digest expectedDigest = contentDigest.toBuilder().setSizeBytes(-1).build();
 
     ContentAddressableStorage contentAddressableStorage = mock(ContentAddressableStorage.class);
     NodeInstance instance = new DummyServerInstance(contentAddressableStorage, null);
@@ -805,7 +781,7 @@ public class NodeInstanceTest {
         .thenReturn(write);
 
     HttpURLConnection httpURLConnection = mock(HttpURLConnection.class);
-    when(httpURLConnection.getContentLengthLong()).thenReturn(contentDigest.getSize());
+    when(httpURLConnection.getContentLengthLong()).thenReturn(contentDigest.getSizeBytes());
     when(httpURLConnection.getResponseCode()).thenReturn(HttpURLConnection.HTTP_OK);
     when(httpURLConnection.getInputStream()).thenReturn(content.newInput());
     URL url = mock(URL.class);

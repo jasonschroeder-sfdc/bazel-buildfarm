@@ -16,7 +16,7 @@ package build.buildfarm.common;
 
 import static java.lang.String.format;
 
-import build.buildfarm.v1test.Digest;
+import build.bazel.remote.execution.v2.Digest;
 import com.google.protobuf.Any;
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.rpc.Code;

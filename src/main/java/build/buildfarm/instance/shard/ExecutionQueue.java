@@ -436,7 +436,7 @@ public class ExecutionQueue {
    * @return The provisions as a set.
    * @note Suggested return identifier: provisionSet.
    */
-  private static SetMultimap<String, String> toMultimap(List<Platform.Property> provisions) {
+  private SetMultimap<String, String> toMultimap(List<Platform.Property> provisions) {
     SetMultimap<String, String> set = LinkedHashMultimap.create();
     for (Platform.Property property : provisions) {
       set.put(property.getName(), property.getValue());

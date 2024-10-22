@@ -20,7 +20,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import build.bazel.remote.execution.v2.ActionResult;
-import build.bazel.remote.execution.v2.DigestFunction;
 import build.bazel.remote.execution.v2.UpdateActionResultRequest;
 import build.buildfarm.common.config.BuildfarmConfigs;
 import build.buildfarm.instance.Instance;
@@ -64,10 +63,7 @@ public class ActionCacheServiceTest {
 
     // ACT
     StreamObserver<ActionResult> response = mock(StreamObserver.class);
-    UpdateActionResultRequest request =
-        UpdateActionResultRequest.newBuilder()
-            .setDigestFunction(DigestFunction.Value.SHA256)
-            .build();
+    UpdateActionResultRequest request = UpdateActionResultRequest.newBuilder().build();
     service.updateActionResult(request, response);
 
     // ASSERT

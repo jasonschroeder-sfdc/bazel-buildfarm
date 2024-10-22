@@ -3,7 +3,6 @@ package build.buildfarm.worker;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import build.bazel.remote.execution.v2.Digest;
-import build.bazel.remote.execution.v2.DigestFunction;
 import build.bazel.remote.execution.v2.Directory;
 import build.buildfarm.common.DigestUtil;
 import build.buildfarm.worker.ExecFileSystem.ExecDirectoryAttributes;
@@ -79,13 +78,11 @@ class ExecTreeWalker implements Closeable {
   }
 
   private final Map<Digest, Directory> index;
-  private final DigestFunction.Value digestFunction;
   private final ArrayDeque<DirectoryNode> stack = new ArrayDeque<>();
   private boolean closed;
 
-  ExecTreeWalker(Map<Digest, Directory> index, DigestFunction.Value digestFunction) {
+  ExecTreeWalker(Map<Digest, Directory> index) {
     this.index = index;
-    this.digestFunction = digestFunction;
   }
 
   Event walk(Path file, Digest digest) {
@@ -109,8 +106,7 @@ class ExecTreeWalker implements Closeable {
           EventType.ENTRY,
           entry.getPath(),
           entry.getAttributes(),
-          new FileNotFoundException(
-              DigestUtil.toString(DigestUtil.fromDigest(digest, digestFunction))));
+          new FileNotFoundException(DigestUtil.toString(digest)));
     }
     DirectoryStream<Entry> stream = new ExecDirectoryStream(directory, entry.getPath());
 

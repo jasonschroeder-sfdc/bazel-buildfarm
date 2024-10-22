@@ -26,10 +26,9 @@ import build.bazel.remote.execution.v2.Compressor;
 import build.bazel.remote.execution.v2.ContentAddressableStorageGrpc;
 import build.bazel.remote.execution.v2.ContentAddressableStorageGrpc.ContentAddressableStorageBlockingStub;
 import build.bazel.remote.execution.v2.ContentAddressableStorageGrpc.ContentAddressableStorageFutureStub;
-import build.bazel.remote.execution.v2.DigestFunction;
+import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.FindMissingBlobsRequest;
 import build.bazel.remote.execution.v2.RequestMetadata;
-import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.Write;
 import build.buildfarm.common.grpc.ByteStreamHelper;
 import build.buildfarm.common.grpc.DelegateServerCallStreamObserver;
@@ -40,7 +39,6 @@ import build.buildfarm.common.resources.ResourceParser;
 import build.buildfarm.common.resources.UploadBlobRequest;
 import build.buildfarm.instance.stub.ByteStreamUploader;
 import build.buildfarm.instance.stub.Chunker;
-import build.buildfarm.v1test.Digest;
 import com.google.bytestream.ByteStreamGrpc;
 import com.google.bytestream.ByteStreamGrpc.ByteStreamBlockingStub;
 import com.google.bytestream.ByteStreamGrpc.ByteStreamStub;
@@ -135,21 +133,17 @@ public class GrpcCAS implements ContentAddressableStorage {
   }
 
   @Override
-  public boolean contains(Digest digest, build.bazel.remote.execution.v2.Digest.Builder result) {
+  public boolean contains(Digest digest, Digest.Builder result) {
     // QueryWriteStatusRequest?
-    if (digest.getSize() < 0) {
+    if (digest.getSizeBytes() < 0) {
       throw new UnsupportedOperationException("cannot lookup hash without size via grpc cas");
     }
-    build.bazel.remote.execution.v2.Digest blobDigest = DigestUtil.toDigest(digest);
-    result.mergeFrom(blobDigest);
-    return Iterables.isEmpty(
-        findMissingBlobs(ImmutableList.of(blobDigest), digest.getDigestFunction()));
+    result.mergeFrom(digest);
+    return Iterables.isEmpty(findMissingBlobs(ImmutableList.of(digest)));
   }
 
   @Override
-  public Iterable<build.bazel.remote.execution.v2.Digest> findMissingBlobs(
-      Iterable<build.bazel.remote.execution.v2.Digest> digests,
-      DigestFunction.Value digestFunction) {
+  public Iterable<Digest> findMissingBlobs(Iterable<Digest> digests) {
     digests =
         StreamSupport.stream(digests.spliterator(), false)
             .filter(digest -> digest.getSizeBytes() != 0)
@@ -158,18 +152,17 @@ public class GrpcCAS implements ContentAddressableStorage {
       return ImmutableList.of();
     }
 
-    List<build.bazel.remote.execution.v2.Digest> missingDigests =
+    List<Digest> missingDigests =
         casBlockingStub
             .get()
             .findMissingBlobs(
                 FindMissingBlobsRequest.newBuilder()
                     .setInstanceName(instanceName)
                     .addAllBlobDigests(digests)
-                    .setDigestFunction(digestFunction)
                     .build())
             .getMissingBlobDigestsList();
-    for (build.bazel.remote.execution.v2.Digest missingDigest : missingDigests) {
-      expire(DigestUtil.fromDigest(missingDigest, digestFunction));
+    for (Digest missingDigest : missingDigests) {
+      expire(missingDigest);
     }
     return missingDigests;
   }
@@ -187,7 +180,7 @@ public class GrpcCAS implements ContentAddressableStorage {
   @Override
   public void get(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest digest,
+      Digest digest,
       long offset,
       long count,
       ServerCallStreamObserver<ByteString> blobObserver,
@@ -227,9 +220,7 @@ public class GrpcCAS implements ContentAddressableStorage {
   }
 
   @Override
-  public ListenableFuture<List<Response>> getAllFuture(
-      Iterable<build.bazel.remote.execution.v2.Digest> digests,
-      DigestFunction.Value digestFunction) {
+  public ListenableFuture<List<Response>> getAllFuture(Iterable<Digest> digests) {
     // FIXME limit to 4MiB total response
     return transform(
         casFutureStub
@@ -238,7 +229,6 @@ public class GrpcCAS implements ContentAddressableStorage {
                 BatchReadBlobsRequest.newBuilder()
                     .setInstanceName(instanceName)
                     .addAllDigests(digests)
-                    .setDigestFunction(digestFunction)
                     .build()),
         BatchReadBlobsResponse::getResponsesList,
         directExecutor());
@@ -249,10 +239,10 @@ public class GrpcCAS implements ContentAddressableStorage {
     try (InputStream in =
         newStreamInput(readResourceName(Compressor.Value.IDENTITY, digest), /* offset= */ 0)) {
       ByteString content = ByteString.readFrom(in);
-      if (content.size() != digest.getSize()) {
+      if (content.size() != digest.getSizeBytes()) {
         throw new IOException(
             String.format(
-                "size/data mismatch: was %d, expected %d", content.size(), digest.getSize()));
+                "size/data mismatch: was %d, expected %d", content.size(), digest.getSizeBytes()));
       }
       return new Blob(content, digest);
     } catch (IOException ex) {
@@ -266,7 +256,7 @@ public class GrpcCAS implements ContentAddressableStorage {
       Channel channel,
       String instanceName,
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest digest,
+      Digest digest,
       UUID uuid,
       RequestMetadata requestMetadata) {
     String resourceName =
@@ -291,7 +281,7 @@ public class GrpcCAS implements ContentAddressableStorage {
         bsStub,
         resourceName,
         Functions.identity(),
-        digest.getSize(),
+        digest.getSizeBytes(),
         /* autoflush= */ false);
   }
 

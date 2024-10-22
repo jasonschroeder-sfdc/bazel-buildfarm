@@ -14,7 +14,7 @@
 
 package build.buildfarm.cas.cfc;
 
-import build.buildfarm.v1test.Digest;
+import build.bazel.remote.execution.v2.Digest;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;

@@ -12,6 +12,7 @@ import build.bazel.remote.execution.v2.RequestMetadata;
 import build.bazel.remote.execution.v2.ResultsCachePolicy;
 import build.bazel.remote.execution.v2.ServerCapabilities;
 import build.buildfarm.common.CasIndexResults;
+import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.DigestUtil.ActionKey;
 import build.buildfarm.common.Watcher;
 import build.buildfarm.common.Write;
@@ -39,6 +40,11 @@ class DummyInstanceBase extends InstanceBase {
   }
 
   @Override
+  public DigestUtil getDigestUtil() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
   public void start(String publicName) {
     throw new UnsupportedOperationException();
   }
@@ -61,29 +67,25 @@ class DummyInstanceBase extends InstanceBase {
 
   @Override
   public ListenableFuture<Iterable<Digest>> findMissingBlobs(
-      Iterable<Digest> digests,
-      DigestFunction.Value digestFunction,
-      RequestMetadata requestMetadata) {
+      Iterable<Digest> digests, RequestMetadata requestMetadata) {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public boolean containsBlob(
-      build.buildfarm.v1test.Digest digest, Digest.Builder result, RequestMetadata requestMetadata)
+  public boolean containsBlob(Digest digest, Digest.Builder result, RequestMetadata requestMetadata)
       throws InterruptedException {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public String readResourceName(
-      Compressor.Value compressor, build.buildfarm.v1test.Digest blobDigest) {
+  public String readResourceName(Compressor.Value compressor, Digest blobDigest) {
     throw new UnsupportedOperationException();
   }
 
   @Override
   public void getBlob(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest blobDigest,
+      Digest blobDigest,
       long offset,
       long count,
       ServerCallStreamObserver<ByteString> blobObserver,
@@ -94,7 +96,7 @@ class DummyInstanceBase extends InstanceBase {
   @Override
   public InputStream newBlobInput(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest digest,
+      Digest digest,
       long offset,
       long deadlineAfter,
       TimeUnit deadlineAfterUnits,
@@ -103,21 +105,20 @@ class DummyInstanceBase extends InstanceBase {
   }
 
   @Override
-  public ListenableFuture<List<Response>> getAllBlobsFuture(
-      Iterable<Digest> digests, DigestFunction.Value digestFunction) {
+  public ListenableFuture<List<Response>> getAllBlobsFuture(Iterable<Digest> digests) {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public String getTree(
-      build.buildfarm.v1test.Digest rootDigest, int pageSize, String pageToken, Tree.Builder tree) {
+  public String getTree(Digest rootDigest, int pageSize, String pageToken, Tree.Builder tree) {
     throw new UnsupportedOperationException();
   }
 
   @Override
   public Write getBlobWrite(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest digest,
+      Digest digest,
+      DigestFunction.Value digestFunction,
       UUID uuid,
       RequestMetadata requestMetadata) {
     throw new UnsupportedOperationException();
@@ -132,10 +133,10 @@ class DummyInstanceBase extends InstanceBase {
   }
 
   @Override
-  public ListenableFuture<build.buildfarm.v1test.Digest> fetchBlob(
+  public ListenableFuture<Digest> fetchBlob(
       Iterable<String> uris,
       Map<String, String> headers,
-      build.buildfarm.v1test.Digest expectedDigest,
+      Digest expectedDigest,
       RequestMetadata requestMetadata) {
     throw new UnsupportedOperationException();
   }
@@ -153,7 +154,7 @@ class DummyInstanceBase extends InstanceBase {
 
   @Override
   public ListenableFuture<Void> execute(
-      build.buildfarm.v1test.Digest actionDigest,
+      Digest actionDigest,
       boolean skipCacheLookup,
       ExecutionPolicy executionPolicy,
       ResultsCachePolicy resultsCachePolicy,
@@ -169,6 +170,11 @@ class DummyInstanceBase extends InstanceBase {
 
   @Override
   public boolean putOperation(Operation operation) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public boolean putAndValidateOperation(Operation operation) {
     throw new UnsupportedOperationException();
   }
 

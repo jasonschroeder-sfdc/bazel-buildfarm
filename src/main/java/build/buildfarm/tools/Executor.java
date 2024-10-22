@@ -29,7 +29,7 @@ import build.bazel.remote.execution.v2.BatchUpdateBlobsRequest.Request;
 import build.bazel.remote.execution.v2.BatchUpdateBlobsResponse;
 import build.bazel.remote.execution.v2.ContentAddressableStorageGrpc;
 import build.bazel.remote.execution.v2.ContentAddressableStorageGrpc.ContentAddressableStorageBlockingStub;
-import build.bazel.remote.execution.v2.DigestFunction;
+import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.ExecuteOperationMetadata;
 import build.bazel.remote.execution.v2.ExecuteRequest;
 import build.bazel.remote.execution.v2.ExecuteResponse;
@@ -40,7 +40,6 @@ import build.bazel.remote.execution.v2.FindMissingBlobsResponse;
 import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.Size;
 import build.buildfarm.common.io.FileStatus;
-import build.buildfarm.v1test.Digest;
 import com.google.bytestream.ByteStreamGrpc;
 import com.google.bytestream.ByteStreamGrpc.ByteStreamStub;
 import com.google.bytestream.ByteStreamProto.WriteRequest;
@@ -105,8 +104,7 @@ class Executor {
       execStub.execute(
           ExecuteRequest.newBuilder()
               .setInstanceName(instanceName)
-              .setActionDigest(DigestUtil.toDigest(actionDigest))
-              .setDigestFunction(actionDigest.getDigestFunction())
+              .setActionDigest(actionDigest)
               .setSkipCacheLookup(true)
               .build(),
           this);
@@ -228,8 +226,7 @@ class Executor {
       throws Exception {
     ContentAddressableStorageBlockingStub casStub =
         ContentAddressableStorageGrpc.newBlockingStub(channel);
-    List<build.bazel.remote.execution.v2.Digest> missingDigests =
-        findMissingBlobs(instanceName, blobsDir, casStub);
+    List<Digest> missingDigests = findMissingBlobs(instanceName, blobsDir, casStub);
     UUID uploadId = UUID.randomUUID();
 
     int[] bucketSizes = new int[128];
@@ -240,8 +237,7 @@ class Executor {
     }
 
     ByteStreamStub bsStub = ByteStreamGrpc.newStub(channel);
-    for (build.bazel.remote.execution.v2.Digest missingDigest : missingDigests) {
-      // needs digest lookup
+    for (Digest missingDigest : missingDigests) {
       Path path = blobsDir.resolve(missingDigest.getHash());
       if (missingDigest.getSizeBytes() < Size.mbToBytes(1)) {
         Request request =
@@ -331,8 +327,7 @@ class Executor {
           writtenFuture.get();
           System.out.println(
               "Wrote long "
-                  + DigestUtil.toString(
-                      DigestUtil.fromDigest(missingDigest, DigestFunction.Value.UNKNOWN))
+                  + DigestUtil.toString(missingDigest)
                   + " in "
                   + (stopwatch.elapsed(MICROSECONDS) / 1000.0)
                   + "ms");
@@ -354,7 +349,7 @@ class Executor {
     }
   }
 
-  private static List<build.bazel.remote.execution.v2.Digest> findMissingBlobs(
+  private static List<Digest> findMissingBlobs(
       String instanceName, Path blobsDir, ContentAddressableStorageBlockingStub casStub)
       throws IOException {
     FindMissingBlobsRequest.Builder request =
@@ -362,8 +357,7 @@ class Executor {
 
     int size = 0;
 
-    ImmutableList.Builder<build.bazel.remote.execution.v2.Digest> missingDigests =
-        ImmutableList.builder();
+    ImmutableList.Builder<Digest> missingDigests = ImmutableList.builder();
 
     System.out.println("Looking for missing blobs");
 
@@ -376,11 +370,9 @@ class Executor {
         FileStatus stat = stat(file, /* followSymlinks= */ false, fileStore);
 
         Digest digest =
-            DigestUtil.buildDigest(
-                file.getFileName().toString(), stat.getSize(), DigestFunction.Value.UNKNOWN);
+            DigestUtil.buildDigest(file.getFileName().toString().split("_")[0], stat.getSize());
 
-        request.addBlobDigests(DigestUtil.toDigest(digest));
-        // specify digest function
+        request.addBlobDigests(digest);
         size++;
         if (size == messagesPerRequest) {
           stopwatch.reset().start();

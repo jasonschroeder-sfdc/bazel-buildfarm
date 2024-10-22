@@ -37,7 +37,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import build.bazel.remote.execution.v2.Compressor;
-import build.bazel.remote.execution.v2.DigestFunction;
+import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Directory;
 import build.bazel.remote.execution.v2.DirectoryNode;
 import build.bazel.remote.execution.v2.FileNode;
@@ -56,7 +56,6 @@ import build.buildfarm.common.Write.NullWrite;
 import build.buildfarm.common.io.Directories;
 import build.buildfarm.common.io.EvenMoreFiles;
 import build.buildfarm.common.io.FeedbackOutputStream;
-import build.buildfarm.v1test.Digest;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -143,7 +142,7 @@ class CASFileCacheTest {
                   return (Iterable<Digest>) invocation.getArguments()[0];
                 })
         .when(delegate)
-        .findMissingBlobs(any(Iterable.class), any(DigestFunction.Value.class));
+        .findMissingBlobs(any(Iterable.class));
     blobs = Maps.newHashMap();
     putService = newSingleThreadExecutor();
     storage = Maps.newConcurrentMap();
@@ -156,6 +155,7 @@ class CASFileCacheTest {
             /* hexBucketLevels= */ 1,
             storeFileDirsIndexInMemory,
             /* execRootFallback= */ false,
+            DIGEST_UTIL,
             expireService,
             /* accessRecorder= */ directExecutor(),
             storage,
@@ -237,22 +237,15 @@ class CASFileCacheTest {
     Digest subdirDigest = DIGEST_UTIL.compute(subDirectory);
     Directory directory =
         Directory.newBuilder()
-            .addFiles(
-                FileNode.newBuilder()
-                    .setName("file")
-                    .setDigest(DigestUtil.toDigest(fileDigest))
-                    .build())
+            .addFiles(FileNode.newBuilder().setName("file").setDigest(fileDigest).build())
             .addDirectories(
-                DirectoryNode.newBuilder()
-                    .setName("subdir")
-                    .setDigest(DigestUtil.toDigest(subdirDigest))
-                    .build())
+                DirectoryNode.newBuilder().setName("subdir").setDigest(subdirDigest).build())
             .build();
     Digest dirDigest = DIGEST_UTIL.compute(directory);
-    Map<build.bazel.remote.execution.v2.Digest, Directory> directoriesIndex =
+    Map<Digest, Directory> directoriesIndex =
         ImmutableMap.of(
-            DigestUtil.toDigest(dirDigest), directory,
-            DigestUtil.toDigest(subdirDigest), subDirectory);
+            dirDigest, directory,
+            subdirDigest, subDirectory);
     Path dirPath =
         getInterruptiblyOrIOException(
                 fileCache.putDirectory(dirDigest, directoriesIndex, putService))
@@ -271,22 +264,15 @@ class CASFileCacheTest {
     Digest subdirDigest = DIGEST_UTIL.compute(subDirectory);
     Directory directory =
         Directory.newBuilder()
-            .addFiles(
-                FileNode.newBuilder()
-                    .setName("file")
-                    .setDigest(DigestUtil.toDigest(fileDigest))
-                    .build())
+            .addFiles(FileNode.newBuilder().setName("file").setDigest(fileDigest).build())
             .addDirectories(
-                DirectoryNode.newBuilder()
-                    .setName("subdir")
-                    .setDigest(DigestUtil.toDigest(subdirDigest))
-                    .build())
+                DirectoryNode.newBuilder().setName("subdir").setDigest(subdirDigest).build())
             .build();
     Digest dirDigest = DIGEST_UTIL.compute(directory);
-    Map<build.bazel.remote.execution.v2.Digest, Directory> directoriesIndex =
+    Map<Digest, Directory> directoriesIndex =
         ImmutableMap.of(
-            DigestUtil.toDigest(dirDigest), directory,
-            DigestUtil.toDigest(subdirDigest), subDirectory);
+            dirDigest, directory,
+            subdirDigest, subDirectory);
     boolean exceptionHandled = false;
     try {
       getInterruptiblyOrIOException(
@@ -408,7 +394,7 @@ class CASFileCacheTest {
     Path invalidDigest = root.resolve("00").resolve("digest");
     ByteString validBlob = ByteString.copyFromUtf8("valid");
     Digest validDigest = DIGEST_UTIL.compute(ByteString.copyFromUtf8("valid"));
-    Path invalidExec = fileCache.getPath(CASFileCache.getKey(validDigest, false) + "_regular");
+    Path invalidExec = fileCache.getPath(CASFileCache.getFileName(validDigest, false) + "_regular");
 
     Files.write(tooFewComponents, ImmutableList.of("Too Few Components"), StandardCharsets.UTF_8);
     Files.write(tooManyComponents, ImmutableList.of("Too Many Components"), StandardCharsets.UTF_8);
@@ -418,10 +404,10 @@ class CASFileCacheTest {
 
     fileCache.start(/* skipLoad= */ false);
 
-    assertThat(Files.exists(tooFewComponents)).isFalse();
-    assertThat(Files.exists(tooManyComponents)).isFalse();
-    assertThat(Files.exists(invalidDigest)).isFalse();
-    assertThat(Files.exists(invalidExec)).isFalse();
+    assertThat(!Files.exists(tooFewComponents)).isTrue();
+    assertThat(!Files.exists(tooManyComponents)).isTrue();
+    assertThat(!Files.exists(invalidDigest)).isTrue();
+    assertThat(!Files.exists(invalidExec)).isTrue();
   }
 
   @Test
@@ -498,18 +484,13 @@ class CASFileCacheTest {
     String pathThree =
         fileCache.put(digestThree, /* isExecutable= */ false).getFileName().toString();
     fileCache.decrementReferences(
-        ImmutableList.of(pathOne, pathTwo, pathThree),
-        ImmutableList.of(),
-        DIGEST_UTIL.getDigestFunction());
+        ImmutableList.of(pathOne, pathTwo, pathThree), ImmutableList.of());
     /* three -> two -> one */
     assertThat(storage.get(pathOne).after).isEqualTo(storage.get(pathTwo));
     assertThat(storage.get(pathTwo).after).isEqualTo(storage.get(pathThree));
 
     /* one -> three -> two */
-    assertThat(
-            fileCache.findMissingBlobs(
-                ImmutableList.of(DigestUtil.toDigest(digestOne)), digestOne.getDigestFunction()))
-        .isEmpty();
+    assertThat(fileCache.findMissingBlobs(ImmutableList.of(digestOne))).isEmpty();
     assertThat(storage.get(pathTwo).after).isEqualTo(storage.get(pathThree));
     assertThat(storage.get(pathThree).after).isEqualTo(storage.get(pathOne));
   }
@@ -521,7 +502,7 @@ class CASFileCacheTest {
     Digest digest = blob.getDigest();
     fileCache.put(blob);
 
-    Digest mismatchedDigest = digest.toBuilder().setSize(digest.getSize() + 1).build();
+    Digest mismatchedDigest = digest.toBuilder().setSizeBytes(digest.getSizeBytes() + 1).build();
     assertThat(fileCache.contains(digest, /* result= */ null)).isTrue();
     assertThat(fileCache.contains(mismatchedDigest, /* result= */ null)).isFalse();
   }
@@ -533,11 +514,10 @@ class CASFileCacheTest {
     Digest digest = blob.getDigest();
     fileCache.put(blob);
 
-    build.bazel.remote.execution.v2.Digest.Builder result =
-        build.bazel.remote.execution.v2.Digest.newBuilder();
-    Digest lookupDigest = digest.toBuilder().setSize(-1).build();
+    Digest.Builder result = Digest.newBuilder();
+    Digest lookupDigest = digest.toBuilder().setSizeBytes(-1).build();
     assertThat(fileCache.contains(lookupDigest, result)).isTrue();
-    assertThat(result.build()).isEqualTo(DigestUtil.toDigest(digest));
+    assertThat(result.build()).isEqualTo(digest);
   }
 
   Write getWrite(Digest digest) throws IOException {
@@ -576,12 +556,12 @@ class CASFileCacheTest {
     incompleteWrite.getFuture().addListener(() -> notified.set(true), directExecutor());
     OutputStream incompleteOut = incompleteWrite.getOutput(1, SECONDS, () -> {});
     try (OutputStream out = completingWrite.getOutput(1, SECONDS, () -> {})) {
-      assertThat(fileCache.size()).isEqualTo(digest.getSize() * 2);
+      assertThat(fileCache.size()).isEqualTo(digest.getSizeBytes() * 2);
       content.writeTo(out);
     }
     assertThat(notified.get()).isTrue();
-    assertThat(fileCache.size()).isEqualTo(digest.getSize());
-    assertThat(incompleteWrite.getCommittedSize()).isEqualTo(digest.getSize());
+    assertThat(fileCache.size()).isEqualTo(digest.getSizeBytes());
+    assertThat(incompleteWrite.getCommittedSize()).isEqualTo(digest.getSizeBytes());
     assertThat(incompleteWrite.isComplete()).isTrue();
     incompleteOut.close(); // redundant
   }
@@ -595,7 +575,7 @@ class CASFileCacheTest {
     OutputStream out = cancellingWrite.getOutput(1, SECONDS, () -> {});
     assertThat(out).isInstanceOf(CancellableOutputStream.class);
     CancellableOutputStream cancelOut = (CancellableOutputStream) out;
-    assertThat(fileCache.size()).isEqualTo(digest.getSize());
+    assertThat(fileCache.size()).isEqualTo(digest.getSizeBytes());
     cancelOut.cancel();
     assertThat(fileCache.size()).isEqualTo(0);
     assertThat(cancellingWrite.getCommittedSize()).isEqualTo(0);
@@ -613,7 +593,7 @@ class CASFileCacheTest {
     OutputStream out = cancellingWrite.getOutput(1, SECONDS, () -> {});
     assertThat(out).isInstanceOf(CancellableOutputStream.class);
     CancellableOutputStream cancelOut = (CancellableOutputStream) out;
-    assertThat(fileCache.size()).isEqualTo(digest.getSize());
+    assertThat(fileCache.size()).isEqualTo(digest.getSizeBytes());
     content.substring(0, 6).writeTo(out);
     assertThat(cancellingWrite.getCommittedSize()).isEqualTo(6);
     assertThat(cancellingWrite.isComplete()).isFalse();
@@ -624,8 +604,8 @@ class CASFileCacheTest {
       content.writeTo(restartedOut);
     }
     assertThat(notified.get()).isTrue();
-    assertThat(fileCache.size()).isEqualTo(digest.getSize());
-    assertThat(cancellingWrite.getCommittedSize()).isEqualTo(digest.getSize());
+    assertThat(fileCache.size()).isEqualTo(digest.getSizeBytes());
+    assertThat(cancellingWrite.getCommittedSize()).isEqualTo(digest.getSizeBytes());
     assertThat(cancellingWrite.isComplete()).isTrue();
   }
 
@@ -655,7 +635,7 @@ class CASFileCacheTest {
       content.substring(9).writeTo(out);
     }
     assertThat(notified.get()).isTrue();
-    assertThat(write.getCommittedSize()).isEqualTo(digest.getSize());
+    assertThat(write.getCommittedSize()).isEqualTo(digest.getSizeBytes());
     assertThat(write.isComplete()).isTrue();
   }
 
@@ -883,9 +863,7 @@ class CASFileCacheTest {
 
   void decrementReference(Path path) throws IOException, InterruptedException {
     fileCache.decrementReferences(
-        ImmutableList.of(path.getFileName().toString()),
-        ImmutableList.of(),
-        DIGEST_UTIL.getDigestFunction());
+        ImmutableList.of(path.getFileName().toString()), ImmutableList.of());
   }
 
   @Test
@@ -967,11 +945,10 @@ class CASFileCacheTest {
                   while (writeState.get() != 1) {
                     MICROSECONDS.sleep(1);
                   }
-                  writeState.getAndIncrement(); // move into output stream state
-                  SECONDS.sleep(1); // inspire a long enough delay to be interrupted
                 } catch (InterruptedException e) {
                   throw new IOException(e);
                 }
+                writeState.getAndIncrement(); // move into output stream state
                 return super.getOutput(offset, deadlineAfter, deadlineAfterUnits, onReadyHandler);
               }
             });
@@ -1053,7 +1030,7 @@ class CASFileCacheTest {
           @Override
           public ListenableFuture<Long> getFuture() {
             return Futures.transform(
-                writeComplete, result -> blob.getDigest().getSize(), directExecutor());
+                writeComplete, result -> blob.getDigest().getSizeBytes(), directExecutor());
           }
 
           @Override
@@ -1119,30 +1096,22 @@ class CASFileCacheTest {
   @Test
   public void findMissingBlobsFiltersEmptyBlobs() throws Exception {
     Digest emptyDigest = Digest.getDefaultInstance();
-    assertThat(
-            fileCache.findMissingBlobs(
-                ImmutableList.of(DigestUtil.toDigest(emptyDigest)), DigestFunction.Value.UNKNOWN))
-        .isEmpty();
+    assertThat(fileCache.findMissingBlobs(ImmutableList.of(emptyDigest))).isEmpty();
   }
 
   @Test
   public void findMissingBlobsPopulatesUnknownSize() throws Exception {
     Blob blob = new Blob(ByteString.copyFromUtf8("content"), DIGEST_UTIL);
-    Digest queryDigest = blob.getDigest().toBuilder().setSize(-1).build();
-    Iterable<build.bazel.remote.execution.v2.Digest> digests =
-        ImmutableList.of(DigestUtil.toDigest(queryDigest));
-    build.bazel.remote.execution.v2.Digest responseDigest =
-        Iterables.getOnlyElement(
-            fileCache.findMissingBlobs(digests, queryDigest.getDigestFunction()));
-    assertThat(responseDigest).isEqualTo(DigestUtil.toDigest(queryDigest));
+    Digest queryDigest = blob.getDigest().toBuilder().setSizeBytes(-1).build();
+    Iterable<Digest> digests = ImmutableList.of(queryDigest);
+    Digest responseDigest = Iterables.getOnlyElement(fileCache.findMissingBlobs(digests));
+    assertThat(responseDigest).isEqualTo(queryDigest);
 
     // populate the digest
     fileCache.put(blob);
 
-    responseDigest =
-        Iterables.getOnlyElement(
-            fileCache.findMissingBlobs(digests, queryDigest.getDigestFunction()));
-    assertThat(responseDigest).isEqualTo(DigestUtil.toDigest(blob.getDigest()));
+    responseDigest = Iterables.getOnlyElement(fileCache.findMissingBlobs(digests));
+    assertThat(responseDigest).isEqualTo(blob.getDigest());
   }
 
   @Test
@@ -1155,6 +1124,7 @@ class CASFileCacheTest {
             /* hexBucketLevels= */ 1,
             storeFileDirsIndexInMemory,
             /* execRootFallback= */ false,
+            DIGEST_UTIL,
             expireService,
             /* accessRecorder= */ directExecutor(),
             storage,
@@ -1187,10 +1157,10 @@ class CASFileCacheTest {
 
                 @Override
                 public int read(byte[] buf, int offset, int len) throws IOException {
-                  if (count >= digest.getSize() / 2) {
+                  if (count >= digest.getSizeBytes() / 2) {
                     throw new IOException(Status.UNAVAILABLE.asRuntimeException());
                   }
-                  len = Math.min((int) digest.getSize() / 2 - count, len);
+                  len = Math.min((int) digest.getSizeBytes() / 2 - count, len);
                   content.substring(count, count + len).copyTo(buf, offset);
                   count += len;
                   return len;
@@ -1218,6 +1188,7 @@ class CASFileCacheTest {
             /* hexBucketLevels= */ 1,
             storeFileDirsIndexInMemory,
             /* execRootFallback= */ false,
+            DIGEST_UTIL,
             expireService,
             /* accessRecorder= */ directExecutor(),
             storage,

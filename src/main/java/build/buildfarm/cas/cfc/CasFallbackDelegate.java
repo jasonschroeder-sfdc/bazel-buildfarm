@@ -15,9 +15,8 @@
 package build.buildfarm.cas.cfc;
 
 import build.bazel.remote.execution.v2.Compressor;
-import build.bazel.remote.execution.v2.DigestFunction;
+import build.bazel.remote.execution.v2.Digest;
 import build.buildfarm.cas.ContentAddressableStorage;
-import build.buildfarm.v1test.Digest;
 import com.google.common.collect.ImmutableList;
 import java.io.IOException;
 import java.io.InputStream;
@@ -84,17 +83,15 @@ public class CasFallbackDelegate {
    * @return Found blobs.
    * @note Suggested return identifier: foundBlobs.
    */
-  public static Iterable<build.bazel.remote.execution.v2.Digest> findMissingBlobs(
-      @Nullable ContentAddressableStorage delegate,
-      ImmutableList<build.bazel.remote.execution.v2.Digest> missingDigests,
-      DigestFunction.Value digestFunction)
+  public static Iterable<Digest> findMissingBlobs(
+      @Nullable ContentAddressableStorage delegate, ImmutableList<Digest> missingDigests)
       throws InterruptedException {
     // skip calling the fallback CAS if it does not exist or we already found the digests
     if (delegate == null || missingDigests.isEmpty()) {
       return missingDigests;
     }
 
-    return delegate.findMissingBlobs(missingDigests, digestFunction);
+    return delegate.findMissingBlobs(missingDigests);
   }
 
   /**
@@ -107,9 +104,7 @@ public class CasFallbackDelegate {
    * @note Suggested return identifier: found.
    */
   public static boolean contains(
-      @Nullable ContentAddressableStorage delegate,
-      Digest digest,
-      build.bazel.remote.execution.v2.Digest.Builder result) {
+      @Nullable ContentAddressableStorage delegate, Digest digest, Digest.Builder result) {
     return delegate != null && delegate.contains(digest, result);
   }
 }

@@ -14,7 +14,7 @@
 
 package build.buildfarm.instance.shard;
 
-import build.buildfarm.v1test.Digest;
+import build.bazel.remote.execution.v2.Digest;
 import java.util.Map;
 import java.util.Set;
 

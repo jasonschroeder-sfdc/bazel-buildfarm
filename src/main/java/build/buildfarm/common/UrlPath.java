@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package build.buildfarm.common.resources;
+package build.buildfarm.common;
 
 import build.bazel.remote.execution.v2.Compressor;
-import build.buildfarm.v1test.Digest;
+import build.bazel.remote.execution.v2.Digest;
+import build.buildfarm.common.resources.Resource;
+import build.buildfarm.common.resources.ResourceParser;
 import java.util.UUID;
 import lombok.Getter;
 

@@ -26,6 +26,7 @@ import build.bazel.remote.execution.v2.Action;
 import build.bazel.remote.execution.v2.ActionResult;
 import build.bazel.remote.execution.v2.Command;
 import build.bazel.remote.execution.v2.Compressor;
+import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.DigestFunction;
 import build.bazel.remote.execution.v2.Directory;
 import build.bazel.remote.execution.v2.DirectoryNode;
@@ -38,7 +39,6 @@ import build.buildfarm.backplane.Backplane;
 import build.buildfarm.common.CommandUtils;
 import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.DigestUtil.ActionKey;
-import build.buildfarm.common.DigestUtil.HashFunction;
 import build.buildfarm.common.EntryLimitException;
 import build.buildfarm.common.ExecutionProperties;
 import build.buildfarm.common.InputStreamFactory;
@@ -53,7 +53,6 @@ import build.buildfarm.common.config.ExecutionPolicy;
 import build.buildfarm.common.grpc.Retrier;
 import build.buildfarm.common.grpc.Retrier.Backoff;
 import build.buildfarm.instance.Instance;
-import build.buildfarm.v1test.Digest;
 import build.buildfarm.v1test.QueueEntry;
 import build.buildfarm.v1test.QueuedOperation;
 import build.buildfarm.worker.ExecFileSystem;
@@ -269,6 +268,11 @@ class ShardWorkerContext implements WorkerContext {
         deadline);
   }
 
+  @Override
+  public DigestUtil getDigestUtil() {
+    return instance.getDigestUtil();
+  }
+
   private ByteString getBlob(Digest digest) throws IOException, InterruptedException {
     try (InputStream in = inputStreamFactory.newInput(Compressor.Value.IDENTITY, digest, 0)) {
       return ByteString.readFrom(in);
@@ -458,36 +462,36 @@ class ShardWorkerContext implements WorkerContext {
     return maximumActionTimeout;
   }
 
-  private void insertBlob(Digest digest, ByteString content)
+  private void insertBlob(Digest digest, DigestFunction.Value digestFunction, ByteString content)
       throws IOException, InterruptedException {
-    if (digest.getSize() > 0) {
-      writer.insertBlob(digest, content);
+    if (digest.getSizeBytes() > 0) {
+      writer.insertBlob(digest, digestFunction, content);
     }
   }
 
-  private void insertFile(Digest digest, Path file) throws IOException, InterruptedException {
-    writer.write(digest, file);
+  private void insertFile(Digest digest, DigestFunction.Value digestFunction, Path file)
+      throws IOException, InterruptedException {
+    writer.write(digest, digestFunction, file);
   }
 
-  private void updateActionResultStdOutputs(
-      ActionResult.Builder resultBuilder, DigestUtil digestUtil)
+  private void updateActionResultStdOutputs(ActionResult.Builder resultBuilder)
       throws IOException, InterruptedException {
     ByteString stdoutRaw = resultBuilder.getStdoutRaw();
     if (stdoutRaw.size() > 0) {
       // reset to allow policy to determine inlining
       resultBuilder.setStdoutRaw(ByteString.EMPTY);
-      Digest stdoutDigest = digestUtil.compute(stdoutRaw);
-      insertBlob(stdoutDigest, stdoutRaw);
-      resultBuilder.setStdoutDigest(DigestUtil.toDigest(stdoutDigest));
+      Digest stdoutDigest = getDigestUtil().compute(stdoutRaw);
+      insertBlob(stdoutDigest, getDigestUtil().getDigestFunction(), stdoutRaw);
+      resultBuilder.setStdoutDigest(stdoutDigest);
     }
 
     ByteString stderrRaw = resultBuilder.getStderrRaw();
     if (stderrRaw.size() > 0) {
       // reset to allow policy to determine inlining
       resultBuilder.setStderrRaw(ByteString.EMPTY);
-      Digest stderrDigest = digestUtil.compute(stderrRaw);
-      insertBlob(stderrDigest, stderrRaw);
-      resultBuilder.setStderrDigest(DigestUtil.toDigest(stderrDigest));
+      Digest stderrDigest = getDigestUtil().compute(stderrRaw);
+      insertBlob(stderrDigest, getDigestUtil().getDigestFunction(), stderrRaw);
+      resultBuilder.setStderrDigest(stderrDigest);
     }
   }
 
@@ -502,7 +506,6 @@ class ShardWorkerContext implements WorkerContext {
 
   private void uploadOutputFile(
       ActionResult.Builder resultBuilder,
-      DigestUtil digestUtil,
       Path outputPath,
       Path workingDirectory,
       String entrySizeViolationType,
@@ -550,7 +553,7 @@ class ShardWorkerContext implements WorkerContext {
 
     Digest digest;
     try {
-      digest = digestUtil.compute(outputPath);
+      digest = getDigestUtil().compute(outputPath);
     } catch (NoSuchFileException e) {
       return;
     }
@@ -558,11 +561,11 @@ class ShardWorkerContext implements WorkerContext {
     resultBuilder
         .addOutputFilesBuilder()
         .setPath(outputFile)
-        .setDigest(DigestUtil.toDigest(digest))
+        .setDigest(digest)
         .setIsExecutable(Files.isExecutable(outputPath));
 
     try {
-      insertFile(digest, outputPath);
+      insertFile(digest, getDigestUtil().getDigestFunction(), outputPath);
     } catch (EntryLimitException e) {
       preconditionFailure
           .addViolationsBuilder()
@@ -605,7 +608,6 @@ class ShardWorkerContext implements WorkerContext {
 
   private void uploadOutputDirectory(
       ActionResult.Builder resultBuilder,
-      DigestUtil digestUtil,
       Path outputDirPath,
       Path workingDirectory,
       String entrySizeViolationType,
@@ -663,7 +665,7 @@ class ShardWorkerContext implements WorkerContext {
               // is buildstream trying to execute in a specific container??
               // can get to NSFE for nonexistent symlinks
               // can fail outright for a symlink to a directory
-              digest = digestUtil.compute(file);
+              digest = getDigestUtil().compute(file);
             } catch (NoSuchFileException e) {
               log.log(
                   Level.SEVERE,
@@ -680,11 +682,11 @@ class ShardWorkerContext implements WorkerContext {
             currentDirectory.addFile(
                 FileNode.newBuilder()
                     .setName(file.getFileName().toString())
-                    .setDigest(DigestUtil.toDigest(digest))
+                    .setDigest(digest)
                     .setIsExecutable(Files.isExecutable(file))
                     .build());
             try {
-              insertFile(digest, file);
+              insertFile(digest, getDigestUtil().getDigestFunction(), file);
             } catch (InterruptedException e) {
               throw new IOException(e);
             } catch (EntryLimitException e) {
@@ -719,8 +721,7 @@ class ShardWorkerContext implements WorkerContext {
               parentDirectory.addDirectory(
                   DirectoryNode.newBuilder()
                       .setName(dir.getFileName().toString())
-                      // FIXME make one digestUtil for all
-                      .setDigest(DigestUtil.toDigest(digestUtil.compute(directory)))
+                      .setDigest(getDigestUtil().compute(directory))
                       .build());
               treeBuilder.addChildren(directory);
             }
@@ -730,12 +731,9 @@ class ShardWorkerContext implements WorkerContext {
         });
     Tree tree = treeBuilder.build();
     ByteString treeBlob = tree.toByteString();
-    Digest treeDigest = digestUtil.compute(treeBlob);
-    insertBlob(treeDigest, treeBlob);
-    resultBuilder
-        .addOutputDirectoriesBuilder()
-        .setPath(outputDir)
-        .setTreeDigest(DigestUtil.toDigest(treeDigest));
+    Digest treeDigest = getDigestUtil().compute(treeBlob);
+    insertBlob(treeDigest, getDigestUtil().getDigestFunction(), treeBlob);
+    resultBuilder.addOutputDirectoriesBuilder().setPath(outputDir).setTreeDigest(treeDigest);
   }
 
   @Override
@@ -749,12 +747,10 @@ class ShardWorkerContext implements WorkerContext {
 
     Path workingDirectory = actionRoot.resolve(command.getWorkingDirectory());
     List<Path> outputPaths = CommandUtils.getResolvedOutputPaths(command, workingDirectory);
-    DigestUtil digestUtil = new DigestUtil(HashFunction.get(actionDigest.getDigestFunction()));
     for (Path outputPath : outputPaths) {
       if (Files.isDirectory(outputPath)) {
         uploadOutputDirectory(
             resultBuilder,
-            digestUtil,
             outputPath,
             workingDirectory,
             entrySizeViolationType,
@@ -762,7 +758,6 @@ class ShardWorkerContext implements WorkerContext {
       } else {
         uploadOutputFile(
             resultBuilder,
-            digestUtil,
             outputPath,
             workingDirectory,
             entrySizeViolationType,
@@ -772,7 +767,7 @@ class ShardWorkerContext implements WorkerContext {
     checkPreconditionFailure(actionDigest, preconditionFailure.build());
 
     /* put together our outputs and update the result */
-    updateActionResultStdOutputs(resultBuilder, digestUtil);
+    updateActionResultStdOutputs(resultBuilder);
   }
 
   @Override
@@ -792,14 +787,9 @@ class ShardWorkerContext implements WorkerContext {
 
   @Override
   public Path createExecDir(
-      String operationName,
-      Map<build.bazel.remote.execution.v2.Digest, Directory> directoriesIndex,
-      DigestFunction.Value digestFunction,
-      Action action,
-      Command command)
+      String operationName, Map<Digest, Directory> directoriesIndex, Action action, Command command)
       throws IOException, InterruptedException {
-    return execFileSystem.createExecDir(
-        operationName, directoriesIndex, digestFunction, action, command);
+    return execFileSystem.createExecDir(operationName, directoriesIndex, action, command);
   }
 
   // might want to split for removeDirectory and decrement references to avoid removing for streamed

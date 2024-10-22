@@ -14,12 +14,11 @@
 
 package build.buildfarm.proxy.http;
 
-import static build.buildfarm.common.resources.UrlPath.parseUploadBlobDigest;
-import static build.buildfarm.proxy.http.ContentAddressableStorageService.digestKey;
+import static build.buildfarm.common.UrlPath.parseUploadBlobDigest;
 
+import build.bazel.remote.execution.v2.Digest;
 import build.buildfarm.common.RingBufferInputStream;
-import build.buildfarm.common.resources.UrlPath.InvalidResourceNameException;
-import build.buildfarm.v1test.Digest;
+import build.buildfarm.common.UrlPath.InvalidResourceNameException;
 import com.google.bytestream.ByteStreamProto.WriteRequest;
 import com.google.common.base.Throwables;
 import com.google.protobuf.ByteString;
@@ -43,13 +42,13 @@ class BlobWriteObserver implements WriteObserver {
       throws InvalidResourceNameException {
     Digest digest = parseUploadBlobDigest(resourceName);
     this.resourceName = resourceName;
-    this.size = digest.getSize();
+    this.size = digest.getSizeBytes();
     buffer = new RingBufferInputStream((int) Math.min(size, BLOB_BUFFER_SIZE));
     putThread =
         new Thread(
             () -> {
               try {
-                simpleBlobStore.put(digestKey(digest), size, buffer);
+                simpleBlobStore.put(digest.getHash(), size, buffer);
               } catch (Exception e) {
                 if (!error.compareAndSet(null, e)) {
                   error.get().addSuppressed(e);

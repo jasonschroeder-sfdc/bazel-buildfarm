@@ -28,13 +28,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import build.bazel.remote.execution.v2.Compressor;
+import build.bazel.remote.execution.v2.Digest;
+import build.bazel.remote.execution.v2.DigestFunction;
 import build.bazel.remote.execution.v2.RequestMetadata;
 import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.Write;
 import build.buildfarm.common.io.FeedbackOutputStream;
 import build.buildfarm.instance.Instance;
 import build.buildfarm.instance.stub.ByteStreamUploader;
-import build.buildfarm.v1test.Digest;
 import com.google.bytestream.ByteStreamGrpc;
 import com.google.bytestream.ByteStreamGrpc.ByteStreamStub;
 import com.google.bytestream.ByteStreamProto.ReadRequest;
@@ -102,13 +103,13 @@ public class ByteStreamServiceTest {
     UUID uuid = UUID.randomUUID();
 
     SettableFuture<Long> writtenFuture = SettableFuture.create();
-    ByteString.Output output = ByteString.newOutput((int) digest.getSize());
+    ByteString.Output output = ByteString.newOutput((int) digest.getSizeBytes());
     FeedbackOutputStream out =
         new FeedbackOutputStream() {
           @Override
           public void close() {
-            if (output.size() == digest.getSize()) {
-              writtenFuture.set(digest.getSize());
+            if (output.size() == digest.getSizeBytes()) {
+              writtenFuture.set(digest.getSizeBytes());
             }
           }
 
@@ -154,13 +155,17 @@ public class ByteStreamServiceTest {
     when(write.getFuture()).thenReturn(writtenFuture);
 
     when(instance.getBlobWrite(
-            Compressor.Value.IDENTITY, digest, uuid, RequestMetadata.getDefaultInstance()))
+            Compressor.Value.IDENTITY,
+            digest,
+            DigestFunction.Value.UNKNOWN,
+            uuid,
+            RequestMetadata.getDefaultInstance()))
         .thenReturn(write);
 
     HashCode hash = HashCode.fromString(digest.getHash());
     String resourceName =
         ByteStreamUploader.uploadResourceName(
-            /* instanceName= */ null, uuid, hash, digest.getSize());
+            /* instanceName= */ null, uuid, hash, digest.getSizeBytes());
 
     Channel channel = InProcessChannelBuilder.forName(fakeServerName).directExecutor().build();
     ByteStreamStub service = ByteStreamGrpc.newStub(channel);
@@ -193,13 +198,13 @@ public class ByteStreamServiceTest {
     UUID uuid = UUID.randomUUID();
 
     SettableFuture<Long> writtenFuture = SettableFuture.create();
-    ByteString.Output output = ByteString.newOutput((int) digest.getSize());
+    ByteString.Output output = ByteString.newOutput((int) digest.getSizeBytes());
     FeedbackOutputStream out =
         new FeedbackOutputStream() {
           @Override
           public void close() {
-            if (output.size() == digest.getSize()) {
-              writtenFuture.set(digest.getSize());
+            if (output.size() == digest.getSizeBytes()) {
+              writtenFuture.set(digest.getSizeBytes());
             }
           }
 
@@ -227,13 +232,17 @@ public class ByteStreamServiceTest {
     when(write.getFuture()).thenReturn(writtenFuture);
 
     when(instance.getBlobWrite(
-            Compressor.Value.IDENTITY, digest, uuid, RequestMetadata.getDefaultInstance()))
+            Compressor.Value.IDENTITY,
+            digest,
+            DigestFunction.Value.UNKNOWN,
+            uuid,
+            RequestMetadata.getDefaultInstance()))
         .thenReturn(write);
 
     HashCode hash = HashCode.fromString(digest.getHash());
     String resourceName =
         ByteStreamUploader.uploadResourceName(
-            /* instanceName= */ null, uuid, hash, digest.getSize());
+            /* instanceName= */ null, uuid, hash, digest.getSizeBytes());
 
     Channel channel = InProcessChannelBuilder.forName(fakeServerName).directExecutor().build();
     ByteStreamStub service = ByteStreamGrpc.newStub(channel);

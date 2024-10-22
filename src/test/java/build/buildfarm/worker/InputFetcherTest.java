@@ -24,11 +24,10 @@ import static org.mockito.Mockito.verify;
 
 import build.bazel.remote.execution.v2.Action;
 import build.bazel.remote.execution.v2.Command;
-import build.bazel.remote.execution.v2.DigestFunction;
+import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Directory;
 import build.bazel.remote.execution.v2.ExecuteResponse;
 import build.buildfarm.cas.cfc.PutDirectoryException;
-import build.buildfarm.v1test.Digest;
 import build.buildfarm.v1test.ExecuteEntry;
 import build.buildfarm.v1test.QueueEntry;
 import build.buildfarm.v1test.QueuedOperation;
@@ -87,8 +86,7 @@ public class InputFetcherTest {
           @Override
           public Path createExecDir(
               String operationName,
-              Map<build.bazel.remote.execution.v2.Digest, Directory> directoriesIndex,
-              DigestFunction.Value digestFunction,
+              Map<Digest, Directory> directoriesIndex,
               Action action,
               Command command)
               throws IOException {

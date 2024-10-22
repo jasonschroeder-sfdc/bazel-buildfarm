@@ -36,7 +36,6 @@ import build.bazel.remote.execution.v2.FindMissingBlobsRequest;
 import build.bazel.remote.execution.v2.FindMissingBlobsResponse;
 import build.bazel.remote.execution.v2.GetTreeRequest;
 import build.bazel.remote.execution.v2.GetTreeResponse;
-import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.config.BuildfarmConfigs;
 import build.buildfarm.common.grpc.TracingMetadataUtils;
 import build.buildfarm.instance.Instance;
@@ -90,9 +89,7 @@ public class ContentAddressableStorageService
     ListenableFuture<FindMissingBlobsResponse.Builder> responseFuture =
         transform(
             instance.findMissingBlobs(
-                request.getBlobDigestsList(),
-                request.getDigestFunction(),
-                TracingMetadataUtils.fromCurrentContext()),
+                request.getBlobDigestsList(), TracingMetadataUtils.fromCurrentContext()),
             builder::addAllMissingBlobDigests,
             directExecutor());
     addCallback(
@@ -157,13 +154,13 @@ public class ContentAddressableStorageService
       TimeUnit writeDeadlineAfterUnits) {
     ImmutableList.Builder<ListenableFuture<Response>> responses = new ImmutableList.Builder<>();
     for (Request request : requests) {
-      build.buildfarm.v1test.Digest digest =
-          DigestUtil.fromDigest(request.getDigest(), digestFunction);
-      ListenableFuture<build.buildfarm.v1test.Digest> future =
+      Digest digest = request.getDigest();
+      ListenableFuture<Digest> future =
           putBlobFuture(
               instance,
               request.getCompressor(),
               digest,
+              digestFunction,
               request.getData(),
               writeDeadlineAfter,
               writeDeadlineAfterUnits,
@@ -171,11 +168,11 @@ public class ContentAddressableStorageService
       responses.add(
           toResponseFuture(
               catching(
-                  transform(future, d -> Code.OK, directExecutor()),
+                  transform(future, (d) -> Code.OK, directExecutor()),
                   Throwable.class,
                   (e) -> Status.fromThrowable(e).getCode(),
                   directExecutor()),
-              DigestUtil.toDigest(digest)));
+              digest));
     }
     return responses.build();
   }
@@ -222,7 +219,7 @@ public class ContentAddressableStorageService
 
   private void getInstanceTree(
       Instance instance,
-      build.buildfarm.v1test.Digest rootDigest,
+      Digest rootDigest,
       String pageToken,
       int pageSize,
       StreamObserver<GetTreeResponse> responseObserver) {
@@ -247,8 +244,7 @@ public class ContentAddressableStorageService
     BatchReadBlobsResponse.Builder response = BatchReadBlobsResponse.newBuilder();
     addCallback(
         transform(
-            instance.getAllBlobsFuture(
-                batchRequest.getDigestsList(), batchRequest.getDigestFunction()),
+            instance.getAllBlobsFuture(batchRequest.getDigestsList()),
             (responses) -> response.addAllResponses(responses).build(),
             directExecutor()),
         new FutureCallback<BatchReadBlobsResponse>() {
@@ -281,18 +277,7 @@ public class ContentAddressableStorageService
       return;
     }
 
-    build.buildfarm.v1test.Digest rootDigest =
-        DigestUtil.fromDigest(request.getRootDigest(), request.getDigestFunction());
-    if (rootDigest.getDigestFunction() == DigestFunction.Value.UNKNOWN) {
-      responseObserver.onError(
-          Status.INVALID_ARGUMENT
-              .withDescription(
-                  format(
-                      "digest %s did not match any known types", DigestUtil.toString(rootDigest)))
-              .asException());
-      return;
-    }
-
-    getInstanceTree(instance, rootDigest, request.getPageToken(), pageSize, responseObserver);
+    getInstanceTree(
+        instance, request.getRootDigest(), request.getPageToken(), pageSize, responseObserver);
   }
 }

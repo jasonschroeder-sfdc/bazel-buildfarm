@@ -16,18 +16,15 @@ package build.buildfarm.server.services;
 
 import static com.google.common.util.concurrent.Futures.addCallback;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
-import static java.lang.String.format;
 
 import build.bazel.remote.execution.v2.ActionCacheGrpc;
 import build.bazel.remote.execution.v2.ActionResult;
-import build.bazel.remote.execution.v2.DigestFunction;
 import build.bazel.remote.execution.v2.GetActionResultRequest;
 import build.bazel.remote.execution.v2.UpdateActionResultRequest;
 import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.config.BuildfarmConfigs;
 import build.buildfarm.common.grpc.TracingMetadataUtils;
 import build.buildfarm.instance.Instance;
-import build.buildfarm.v1test.Digest;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.Status;
@@ -57,21 +54,10 @@ public class ActionCacheService extends ActionCacheGrpc.ActionCacheImplBase {
   @Override
   public void getActionResult(
       GetActionResultRequest request, StreamObserver<ActionResult> responseObserver) {
-    Digest actionDigest =
-        DigestUtil.fromDigest(request.getActionDigest(), request.getDigestFunction());
-    if (actionDigest.getDigestFunction() == DigestFunction.Value.UNKNOWN) {
-      responseObserver.onError(
-          Status.INVALID_ARGUMENT
-              .withDescription(
-                  format(
-                      "digest %s did not match any known types", DigestUtil.toString(actionDigest)))
-              .asException());
-      return;
-    }
-
     ListenableFuture<ActionResult> resultFuture =
         instance.getActionResult(
-            DigestUtil.asActionKey(actionDigest), TracingMetadataUtils.fromCurrentContext());
+            DigestUtil.asActionKey(request.getActionDigest()),
+            TracingMetadataUtils.fromCurrentContext());
 
     addCallback(
         resultFuture,
@@ -98,9 +84,9 @@ public class ActionCacheService extends ActionCacheGrpc.ActionCacheImplBase {
           public void onFailure(Throwable t) {
             log.log(
                 Level.WARNING,
-                format(
+                String.format(
                     "getActionResult(%s): %s",
-                    request.getInstanceName(), DigestUtil.toString(actionDigest)),
+                    request.getInstanceName(), DigestUtil.toString(request.getActionDigest())),
                 t);
             Status status = Status.fromThrowable(t);
             if (!call.isCancelled()) {
@@ -129,21 +115,9 @@ public class ActionCacheService extends ActionCacheGrpc.ActionCacheImplBase {
       return;
     }
 
-    Digest actionDigest =
-        DigestUtil.fromDigest(request.getActionDigest(), request.getDigestFunction());
-    if (actionDigest.getDigestFunction() == DigestFunction.Value.UNKNOWN) {
-      responseObserver.onError(
-          Status.INVALID_ARGUMENT
-              .withDescription(
-                  format(
-                      "digest %s did not match any known types", DigestUtil.toString(actionDigest)))
-              .asException());
-      return;
-    }
-
     ActionResult actionResult = request.getActionResult();
     try {
-      instance.putActionResult(DigestUtil.asActionKey(actionDigest), actionResult);
+      instance.putActionResult(DigestUtil.asActionKey(request.getActionDigest()), actionResult);
 
       responseObserver.onNext(actionResult);
       responseObserver.onCompleted();

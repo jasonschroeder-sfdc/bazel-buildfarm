@@ -20,13 +20,13 @@ import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
 import build.bazel.remote.execution.v2.Action;
+import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Directory;
 import build.bazel.remote.execution.v2.DirectoryNode;
 import build.bazel.remote.execution.v2.FileNode;
 import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.grpc.ByteStreamHelper;
 import build.buildfarm.common.grpc.Retrier;
-import build.buildfarm.v1test.Digest;
 import com.google.bytestream.ByteStreamGrpc;
 import com.google.bytestream.ByteStreamGrpc.ByteStreamStub;
 import com.google.bytestream.ByteStreamProto.ReadRequest;
@@ -81,7 +81,7 @@ class Extract {
   }
 
   static String blobName(String instanceName, Digest digest) {
-    return String.format("%s/blobs/%s", instanceName, DigestUtil.toString(digest));
+    return String.format("%s/blobs/%s/%d", instanceName, digest.getHash(), digest.getSizeBytes());
   }
 
   static InputStream newInput(
@@ -106,13 +106,14 @@ class Extract {
       ByteStreamStub bsStub,
       AtomicLong outstandingOperations,
       ListeningScheduledExecutorService retryService) {
-    if (digest.getSize() == 0) {
+    if (digest.getSizeBytes() == 0) {
       return outstandingOperations::getAndDecrement;
     }
     return () -> {
       Path file = root.resolve(digest.getHash());
       try {
-        if (!Files.exists(file) || Files.size(file) != digest.getSize()) {
+        if (!Files.exists(file) || Files.size(file) != digest.getSizeBytes()) {
+          System.out.println("Getting blob " + digest.getHash() + "/" + digest.getSizeBytes());
           try (OutputStream out = Files.newOutputStream(file)) {
             try (InputStream in = newInput(instanceName, digest, bsStub, retryService)) {
               ByteStreams.copy(in, out);
@@ -130,12 +131,12 @@ class Extract {
       String type, String instanceName, Digest digest, ByteStreamStub bsStub, Path root)
       throws IOException, InterruptedException {
     Path file = root.resolve(digest.getHash());
-    if (Files.exists(file) && Files.size(file) == digest.getSize()) {
+    if (Files.exists(file) && Files.size(file) == digest.getSizeBytes()) {
       try (InputStream in = Files.newInputStream(file)) {
         return ByteString.readFrom(in);
       }
     }
-    System.out.println("Getting " + type + " " + digest.getHash() + "/" + digest.getSize());
+    System.out.println("Getting " + type + " " + digest.getHash() + "/" + digest.getSizeBytes());
     ByteString content = getBlob(instanceName, digest, bsStub);
     try (OutputStream out = Files.newOutputStream(file)) {
       content.writeTo(out);
@@ -149,7 +150,7 @@ class Extract {
     bsStub.read(
         ReadRequest.newBuilder().setResourceName(blobName(instanceName, digest)).build(),
         new StreamObserver<ReadResponse>() {
-          final ByteString.Output out = ByteString.newOutput((int) digest.getSize());
+          final ByteString.Output out = ByteString.newOutput((int) digest.getSizeBytes());
 
           @Override
           public void onNext(ReadResponse response) {
@@ -164,7 +165,7 @@ class Extract {
           public void onError(Throwable t) {
             Status status = Status.fromThrowable(t);
             if (status.getCode() == Code.NOT_FOUND) {
-              t = new NoSuchFileException(digest.getHash() + "/" + digest.getSize());
+              t = new NoSuchFileException(digest.getHash() + "/" + digest.getSizeBytes());
             }
             blobFuture.setException(t);
           }
@@ -217,8 +218,7 @@ class Extract {
 
       void handleDirectory(Directory directory) {
         for (FileNode fileNode : directory.getFilesList()) {
-          Digest fileDigest =
-              DigestUtil.fromDigest(fileNode.getDigest(), digest.getDigestFunction());
+          Digest fileDigest = fileNode.getDigest();
           if (!visitedDigests.contains(fileDigest)) {
             visitedDigests.add(fileDigest);
             outstandingOperations.getAndIncrement();
@@ -229,8 +229,7 @@ class Extract {
         }
 
         for (DirectoryNode directoryNode : directory.getDirectoriesList()) {
-          Digest directoryDigest =
-              DigestUtil.fromDigest(directoryNode.getDigest(), digest.getDigestFunction());
+          Digest directoryDigest = directoryNode.getDigest();
           // we may have seen this digest, but now we will have seen it as a directory
           if (!visitedDirectories.contains(directoryDigest)) {
             // probably won't collide with other writers, with single thread
@@ -272,8 +271,7 @@ class Extract {
     for (Digest actionDigest : actionDigests) {
       ByteString content = getBlobIntoFile("action", instanceName, actionDigest, bsStub, root);
       Action action = Action.parseFrom(content);
-      Digest commandDigest =
-          DigestUtil.fromDigest(action.getCommandDigest(), actionDigest.getDigestFunction());
+      Digest commandDigest = action.getCommandDigest();
       if (!visitedDigests.contains(commandDigest)) {
         visitedDigests.add(commandDigest);
         outstandingOperations.getAndIncrement();
@@ -281,8 +279,7 @@ class Extract {
             blobGetter(
                 root, instanceName, commandDigest, bsStub, outstandingOperations, retryService));
       }
-      Digest inputRootDigest =
-          DigestUtil.fromDigest(action.getInputRootDigest(), actionDigest.getDigestFunction());
+      Digest inputRootDigest = action.getInputRootDigest();
       if (!visitedDigests.contains(inputRootDigest)) {
         visitedDirectories.add(inputRootDigest);
         visitedDigests.add(inputRootDigest);

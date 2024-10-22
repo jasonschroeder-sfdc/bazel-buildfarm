@@ -15,7 +15,7 @@
 package build.buildfarm.common;
 
 import build.bazel.remote.execution.v2.Compressor;
-import build.buildfarm.v1test.Digest;
+import build.bazel.remote.execution.v2.Digest;
 import java.io.IOException;
 import java.io.InputStream;
 

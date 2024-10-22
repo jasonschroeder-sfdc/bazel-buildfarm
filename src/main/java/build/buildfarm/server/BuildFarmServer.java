@@ -21,6 +21,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
+import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.LoggingMain;
 import build.buildfarm.common.config.BuildfarmConfigs;
 import build.buildfarm.common.config.GrpcMetrics;
@@ -116,6 +117,7 @@ public class BuildFarmServer extends LoggingMain {
     return new ServerInstance(
         configs.getServer().getName(),
         configs.getServer().getSession() + "-" + configs.getServer().getName(),
+        new DigestUtil(configs.getDigestFunction()),
         this::initiateShutdown);
   }
 

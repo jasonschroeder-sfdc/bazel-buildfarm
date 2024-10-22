@@ -15,13 +15,13 @@
 package build.buildfarm.worker;
 
 import build.bazel.remote.execution.v2.Compressor;
+import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.Directory;
 import build.bazel.remote.execution.v2.DirectoryNode;
 import build.bazel.remote.execution.v2.FileNode;
 import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.InputStreamFactory;
 import build.buildfarm.common.Watchdog;
-import build.buildfarm.v1test.Digest;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
@@ -110,7 +110,7 @@ public class FuseCAS extends FuseStubFS {
 
     @Override
     public int size() {
-      return (int) digest.getSize();
+      return (int) digest.getSizeBytes();
     }
   }
 
@@ -436,18 +436,12 @@ public class FuseCAS extends FuseStubFS {
 
         for (FileNode fileNode : directory.getFilesList()) {
           builder.put(
-              fileNode.getName(),
-              new FileEntry(
-                  DigestUtil.fromDigest(fileNode.getDigest(), digest.getDigestFunction()),
-                  fileNode.getIsExecutable()));
+              fileNode.getName(), new FileEntry(fileNode.getDigest(), fileNode.getIsExecutable()));
         }
         for (DirectoryNode directoryNode : directory.getDirectoriesList()) {
           builder.put(
               directoryNode.getName(),
-              new CASDirectoryEntry(
-                  fetchChildrenFunction(
-                      DigestUtil.fromDigest(
-                          directoryNode.getDigest(), digest.getDigestFunction()))));
+              new CASDirectoryEntry(fetchChildrenFunction(directoryNode.getDigest())));
         }
 
         children = builder.build();
@@ -911,7 +905,7 @@ public class FuseCAS extends FuseStubFS {
         return -ErrorCodes.EIO();
       }
 
-      Preconditions.checkState(fileEntry.digest.getSize() == content.size());
+      Preconditions.checkState(fileEntry.digest.getSizeBytes() == content.size());
     }
 
     int length = content.size();

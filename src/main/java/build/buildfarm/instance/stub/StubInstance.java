@@ -65,7 +65,6 @@ import build.bazel.remote.execution.v2.WaitExecutionRequest;
 import build.buildfarm.common.CasIndexResults;
 import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.DigestUtil.ActionKey;
-import build.buildfarm.common.DigestUtil.HashFunction;
 import build.buildfarm.common.EntryLimitException;
 import build.buildfarm.common.Size;
 import build.buildfarm.common.Time;
@@ -160,6 +159,7 @@ public class StubInstance extends InstanceBase {
   private static final long DEFAULT_DEADLINE_DAYS = 100 * 365;
 
   private final String identifier;
+  private final DigestUtil digestUtil;
   private final ManagedChannel channel;
   private final ManagedChannel writeChannel;
   private final @Nullable Duration grpcTimeout;
@@ -170,33 +170,40 @@ public class StubInstance extends InstanceBase {
 
   @VisibleForTesting long maxRequestSize = Size.mbToBytes(4);
 
-  public StubInstance(String name, ManagedChannel channel) {
-    this(name, "no-identifier", channel, Durations.fromDays(DEFAULT_DEADLINE_DAYS));
-  }
-
-  public StubInstance(String name, String identifier, ManagedChannel channel) {
-    this(name, identifier, channel, Durations.fromDays(DEFAULT_DEADLINE_DAYS));
+  public StubInstance(String name, DigestUtil digestUtil, ManagedChannel channel) {
+    this(name, "no-identifier", digestUtil, channel, Durations.fromDays(DEFAULT_DEADLINE_DAYS));
   }
 
   public StubInstance(
-      String name, String identifier, ManagedChannel channel, Duration grpcTimeout) {
-    this(name, identifier, channel, grpcTimeout, NO_RETRIES, /* retryService= */ null);
+      String name, String identifier, DigestUtil digestUtil, ManagedChannel channel) {
+    this(name, identifier, digestUtil, channel, Durations.fromDays(DEFAULT_DEADLINE_DAYS));
   }
 
   public StubInstance(
       String name,
       String identifier,
+      DigestUtil digestUtil,
+      ManagedChannel channel,
+      Duration grpcTimeout) {
+    this(name, identifier, digestUtil, channel, grpcTimeout, NO_RETRIES, /* retryService= */ null);
+  }
+
+  public StubInstance(
+      String name,
+      String identifier,
+      DigestUtil digestUtil,
       ManagedChannel channel,
       Duration grpcTimeout,
       Retrier retrier,
       @Nullable ListeningScheduledExecutorService retryService) {
-    this(name, identifier, channel, channel, grpcTimeout, retrier, retryService);
+    this(name, identifier, digestUtil, channel, channel, grpcTimeout, retrier, retryService);
   }
 
   @SuppressWarnings("NullableProblems")
   public StubInstance(
       String name,
       String identifier,
+      DigestUtil digestUtil,
       ManagedChannel channel,
       ManagedChannel writeChannel,
       Duration grpcTimeout,
@@ -204,6 +211,7 @@ public class StubInstance extends InstanceBase {
       @Nullable ListeningScheduledExecutorService retryService) {
     super(name);
     this.identifier = identifier;
+    this.digestUtil = digestUtil;
     this.channel = channel;
     this.writeChannel = writeChannel;
     this.grpcTimeout = grpcTimeout;
@@ -359,6 +367,11 @@ public class StubInstance extends InstanceBase {
   }
 
   @Override
+  public DigestUtil getDigestUtil() {
+    return digestUtil;
+  }
+
+  @Override
   public void start(String publicName) {}
 
   @Override
@@ -387,15 +400,13 @@ public class StubInstance extends InstanceBase {
   public ListenableFuture<ActionResult> getActionResult(
       ActionKey actionKey, RequestMetadata requestMetadata) {
     throwIfStopped();
-    build.buildfarm.v1test.Digest actionDigest = actionKey.getDigest();
     return catching(
         deadlined(actionCacheFutureStub)
             .withInterceptors(attachMetadataInterceptor(requestMetadata))
             .getActionResult(
                 GetActionResultRequest.newBuilder()
                     .setInstanceName(getName())
-                    .setActionDigest(DigestUtil.toDigest(actionDigest))
-                    .setDigestFunction(actionDigest.getDigestFunction())
+                    .setActionDigest(actionKey.getDigest())
                     .build()),
         StatusRuntimeException.class,
         (e) -> {
@@ -412,28 +423,23 @@ public class StubInstance extends InstanceBase {
   public void putActionResult(ActionKey actionKey, ActionResult actionResult) {
     throwIfStopped();
     // should we be checking the ActionResult return value?
-    build.buildfarm.v1test.Digest actionDigest = actionKey.getDigest();
     deadlined(actionCacheBlockingStub)
         .updateActionResult(
             UpdateActionResultRequest.newBuilder()
                 .setInstanceName(getName())
-                .setActionDigest(DigestUtil.toDigest(actionDigest))
-                .setDigestFunction(actionDigest.getDigestFunction())
+                .setActionDigest(actionKey.getDigest())
                 .setActionResult(actionResult)
                 .build());
   }
 
   @Override
   public ListenableFuture<Iterable<Digest>> findMissingBlobs(
-      Iterable<Digest> digests,
-      DigestFunction.Value digestFunction,
-      RequestMetadata requestMetadata) {
+      Iterable<Digest> digests, RequestMetadata requestMetadata) {
     throwIfStopped();
     FindMissingBlobsRequest request =
         FindMissingBlobsRequest.newBuilder()
             .setInstanceName(getName())
             .addAllBlobDigests(digests)
-            .setDigestFunction(digestFunction)
             .build();
     if (request.getSerializedSize() > maxRequestSize) {
       // log2n partition for size reduction as needed
@@ -442,7 +448,7 @@ public class StubInstance extends InstanceBase {
           allAsList(
               Iterables.transform(
                   Iterables.partition(digests, partitionSize),
-                  subDigests -> findMissingBlobs(subDigests, digestFunction, requestMetadata))),
+                  subDigests -> findMissingBlobs(subDigests, requestMetadata))),
           Iterables::concat,
           directExecutor());
     }
@@ -492,10 +498,10 @@ public class StubInstance extends InstanceBase {
   }
 
   @Override
-  public ListenableFuture<build.buildfarm.v1test.Digest> fetchBlob(
+  public ListenableFuture<Digest> fetchBlob(
       Iterable<String> uris,
       Map<String, String> headers,
-      build.buildfarm.v1test.Digest expectedDigest,
+      Digest expectedDigest,
       RequestMetadata requestMetadata) {
     // needs to add expectedDigest, digestFunction, etc
     FetchBlobRequest request =
@@ -513,8 +519,7 @@ public class StubInstance extends InstanceBase {
             throw StatusProto.toStatusRuntimeException(response.getStatus());
           }
           // other responses, uris, expirations, etc
-          return DigestUtil.fromDigest(
-              response.getBlobDigest(), expectedDigest.getDigestFunction());
+          return response.getBlobDigest();
         },
         directExecutor());
   }
@@ -547,8 +552,7 @@ public class StubInstance extends InstanceBase {
   }
 
   @Override
-  public String readResourceName(
-      Compressor.Value compressor, build.buildfarm.v1test.Digest blobDigest) {
+  public String readResourceName(Compressor.Value compressor, Digest blobDigest) {
     return ResourceParser.downloadResourceName(
         DownloadBlobRequest.newBuilder()
             .setInstanceName(getName())
@@ -636,7 +640,7 @@ public class StubInstance extends InstanceBase {
   @Override
   public void getBlob(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest blobDigest,
+      Digest blobDigest,
       long offset,
       long limit,
       ServerCallStreamObserver<ByteString> blobObserver,
@@ -657,7 +661,7 @@ public class StubInstance extends InstanceBase {
   @Override
   public InputStream newBlobInput(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest digest,
+      Digest digest,
       long offset,
       long deadlineAfter,
       TimeUnit deadlineAfterUnits,
@@ -667,15 +671,13 @@ public class StubInstance extends InstanceBase {
   }
 
   @Override
-  public ListenableFuture<List<Response>> getAllBlobsFuture(
-      Iterable<Digest> digests, DigestFunction.Value digestFunction) {
+  public ListenableFuture<List<Response>> getAllBlobsFuture(Iterable<Digest> digests) {
     return transform(
         deadlined(casFutureStub)
             .batchReadBlobs(
                 BatchReadBlobsRequest.newBuilder()
                     .setInstanceName(getName())
                     .addAllDigests(digests)
-                    .setDigestFunction(digestFunction)
                     .build()),
         BatchReadBlobsResponse::getResponsesList,
         directExecutor());
@@ -683,16 +685,10 @@ public class StubInstance extends InstanceBase {
 
   @Override
   public boolean containsBlob(
-      build.buildfarm.v1test.Digest digest,
-      Digest.Builder result,
-      RequestMetadata requestMetadata) {
-    Digest blobDigest = DigestUtil.toDigest(digest);
-    result.mergeFrom(blobDigest);
+      Digest digest, Digest.Builder result, RequestMetadata requestMetadata) {
+    result.mergeFrom(digest);
     try {
-      return Iterables.isEmpty(
-          findMissingBlobs(
-                  ImmutableList.of(blobDigest), digest.getDigestFunction(), requestMetadata)
-              .get());
+      return Iterables.isEmpty(findMissingBlobs(ImmutableList.of(digest), requestMetadata).get());
     } catch (ExecutionException e) {
       Throwable cause = e.getCause();
       if (cause instanceof RuntimeException) {
@@ -731,11 +727,16 @@ public class StubInstance extends InstanceBase {
   @Override
   public Write getBlobWrite(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest digest,
+      Digest digest,
+      DigestFunction.Value digestFunction,
       UUID uuid,
       RequestMetadata requestMetadata) {
     BlobInformation blob =
-        BlobInformation.newBuilder().setCompressor(compressor).setDigest(digest).build();
+        BlobInformation.newBuilder()
+            .setCompressor(compressor)
+            .setDigest(digest)
+            .setDigestFunction(digestFunction)
+            .build();
     String resourceName =
         ResourceParser.uploadResourceName(
             UploadBlobRequest.newBuilder()
@@ -753,16 +754,14 @@ public class StubInstance extends InstanceBase {
           return t;
         },
         compressor == Compressor.Value.IDENTITY
-            ? digest.getSize()
+            ? digest.getSizeBytes()
             : StubWriteOutputStream.COMPRESSED_EXPECTED_SIZE,
         /* autoflush= */ false,
         requestMetadata);
   }
 
   @Override
-  public String getTree(
-      build.buildfarm.v1test.Digest rootDigest, int pageSize, String pageToken, Tree.Builder tree) {
-    DigestUtil digestUtil = new DigestUtil(HashFunction.get(rootDigest.getDigestFunction()));
+  public String getTree(Digest rootDigest, int pageSize, String pageToken, Tree.Builder tree) {
     tree.setRootDigest(rootDigest);
     throwIfStopped();
     Iterator<GetTreeResponse> replies =
@@ -770,8 +769,7 @@ public class StubInstance extends InstanceBase {
             .getTree(
                 GetTreeRequest.newBuilder()
                     .setInstanceName(getName())
-                    .setRootDigest(DigestUtil.toDigest(rootDigest))
-                    .setDigestFunction(rootDigest.getDigestFunction())
+                    .setRootDigest(rootDigest)
                     .setPageSize(pageSize)
                     .setPageToken(pageToken)
                     .build());
@@ -789,8 +787,7 @@ public class StubInstance extends InstanceBase {
 
   @Override
   public ListenableFuture<Void> execute(
-      // TODO should this be ActionKey
-      build.buildfarm.v1test.Digest actionDigest,
+      Digest actionDigest,
       boolean skipCacheLookup,
       ExecutionPolicy executionPolicy,
       ResultsCachePolicy resultsCachePolicy,
@@ -818,6 +815,11 @@ public class StubInstance extends InstanceBase {
           StatusProto.toStatusException(status));
     }
     return code == Code.OK.getNumber();
+  }
+
+  @Override
+  public boolean putAndValidateOperation(Operation operation) {
+    throw new UnsupportedOperationException();
   }
 
   @Override

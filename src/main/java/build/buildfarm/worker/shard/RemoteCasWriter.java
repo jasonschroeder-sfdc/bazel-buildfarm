@@ -19,6 +19,8 @@ import static java.lang.String.format;
 import static java.util.concurrent.TimeUnit.DAYS;
 
 import build.bazel.remote.execution.v2.Compressor;
+import build.bazel.remote.execution.v2.Digest;
+import build.bazel.remote.execution.v2.DigestFunction;
 import build.bazel.remote.execution.v2.RequestMetadata;
 import build.buildfarm.backplane.Backplane;
 import build.buildfarm.common.Size;
@@ -27,7 +29,6 @@ import build.buildfarm.common.grpc.Retrier;
 import build.buildfarm.common.grpc.RetryException;
 import build.buildfarm.common.io.FeedbackOutputStream;
 import build.buildfarm.instance.Instance;
-import build.buildfarm.v1test.Digest;
 import com.google.common.base.Throwables;
 import com.google.common.cache.LoadingCache;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -61,16 +62,17 @@ public class RemoteCasWriter implements CasWriter {
   }
 
   @Override
-  public void write(Digest digest, Path file) throws IOException, InterruptedException {
-    if (digest.getSize() > 0) {
-      insertFileToCasMember(digest, file);
+  public void write(Digest digest, DigestFunction.Value digestFunction, Path file)
+      throws IOException, InterruptedException {
+    if (digest.getSizeBytes() > 0) {
+      insertFileToCasMember(digest, digestFunction, file);
     }
   }
 
-  private void insertFileToCasMember(Digest digest, Path file)
+  private void insertFileToCasMember(Digest digest, DigestFunction.Value digestFunction, Path file)
       throws IOException, InterruptedException {
     try (InputStream in = Files.newInputStream(file)) {
-      retrier.execute(() -> writeToCasMember(digest, in));
+      retrier.execute(() -> writeToCasMember(digest, digestFunction, in));
     } catch (RetryException e) {
       Throwable cause = e.getCause();
       Throwables.throwIfInstanceOf(cause, IOException.class);
@@ -79,11 +81,11 @@ public class RemoteCasWriter implements CasWriter {
     }
   }
 
-  private long writeToCasMember(Digest digest, InputStream in)
+  private long writeToCasMember(Digest digest, DigestFunction.Value digestFunction, InputStream in)
       throws IOException, InterruptedException {
     // create a write for inserting into another CAS member.
     String workerName = getRandomWorker();
-    Write write = getCasMemberWrite(digest, workerName);
+    Write write = getCasMemberWrite(digest, digestFunction, workerName);
 
     write.reset();
     try {
@@ -97,18 +99,23 @@ public class RemoteCasWriter implements CasWriter {
     }
   }
 
-  private Write getCasMemberWrite(Digest digest, String workerName) throws IOException {
+  private Write getCasMemberWrite(
+      Digest digest, DigestFunction.Value digestFunction, String workerName) throws IOException {
     Instance casMember = workerStub(workerName);
 
     return casMember.getBlobWrite(
-        Compressor.Value.IDENTITY, digest, UUID.randomUUID(), RequestMetadata.getDefaultInstance());
+        Compressor.Value.IDENTITY,
+        digest,
+        digestFunction,
+        UUID.randomUUID(),
+        RequestMetadata.getDefaultInstance());
   }
 
   @Override
-  public void insertBlob(Digest digest, ByteString content)
+  public void insertBlob(Digest digest, DigestFunction.Value digestFunction, ByteString content)
       throws IOException, InterruptedException {
     try (InputStream in = content.newInput()) {
-      retrier.execute(() -> writeToCasMember(digest, in));
+      retrier.execute(() -> writeToCasMember(digest, digestFunction, in));
     } catch (RetryException e) {
       Throwable cause = e.getCause();
       Throwables.throwIfInstanceOf(cause, IOException.class);
@@ -183,14 +190,14 @@ public class RemoteCasWriter implements CasWriter {
                   // ignore
                 }
                 long committedSize = write.getCommittedSize();
-                if (committedSize != digest.getSize()) {
+                if (committedSize != digest.getSizeBytes()) {
                   log.log(
                       Level.WARNING,
                       format(
                           "committed size %d did not match expectation for digestUtil",
                           committedSize));
                 }
-                writtenFuture.set(digest.getSize());
+                writtenFuture.set(digest.getSizeBytes());
               } catch (RuntimeException e) {
                 writtenFuture.setException(e);
               }

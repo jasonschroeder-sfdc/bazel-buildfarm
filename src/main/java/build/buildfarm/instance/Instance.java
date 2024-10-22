@@ -27,6 +27,7 @@ import build.bazel.remote.execution.v2.RequestMetadata;
 import build.bazel.remote.execution.v2.ResultsCachePolicy;
 import build.bazel.remote.execution.v2.ServerCapabilities;
 import build.buildfarm.common.CasIndexResults;
+import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.DigestUtil.ActionKey;
 import build.buildfarm.common.EntryLimitException;
 import build.buildfarm.common.Watcher;
@@ -56,6 +57,8 @@ import java.util.function.Consumer;
 public interface Instance {
   String getName();
 
+  DigestUtil getDigestUtil();
+
   void start(String publicName) throws IOException;
 
   void stop() throws InterruptedException;
@@ -66,19 +69,16 @@ public interface Instance {
   void putActionResult(ActionKey actionKey, ActionResult actionResult) throws InterruptedException;
 
   ListenableFuture<Iterable<Digest>> findMissingBlobs(
-      Iterable<Digest> digests,
-      DigestFunction.Value digestFunction,
-      RequestMetadata requestMetadata);
+      Iterable<Digest> digests, RequestMetadata requestMetadata);
 
-  boolean containsBlob(
-      build.buildfarm.v1test.Digest digest, Digest.Builder result, RequestMetadata requestMetadata)
+  boolean containsBlob(Digest digest, Digest.Builder result, RequestMetadata requestMetadata)
       throws InterruptedException;
 
-  String readResourceName(Compressor.Value compressor, build.buildfarm.v1test.Digest blobDigest);
+  String readResourceName(Compressor.Value compressor, Digest blobDigest);
 
   void getBlob(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest blobDigest,
+      Digest blobDigest,
       long offset,
       long count,
       ServerCallStreamObserver<ByteString> blobObserver,
@@ -86,22 +86,21 @@ public interface Instance {
 
   InputStream newBlobInput(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest digest,
+      Digest digest,
       long offset,
       long deadlineAfter,
       TimeUnit deadlineAfterUnits,
       RequestMetadata requestMetadata)
       throws IOException;
 
-  ListenableFuture<List<Response>> getAllBlobsFuture(
-      Iterable<Digest> digests, DigestFunction.Value digestFunction);
+  ListenableFuture<List<Response>> getAllBlobsFuture(Iterable<Digest> digests);
 
-  String getTree(
-      build.buildfarm.v1test.Digest rootDigest, int pageSize, String pageToken, Tree.Builder tree);
+  String getTree(Digest rootDigest, int pageSize, String pageToken, Tree.Builder tree);
 
   Write getBlobWrite(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest digest,
+      Digest digest,
+      DigestFunction.Value digestFunction,
       UUID uuid,
       RequestMetadata requestMetadata)
       throws EntryLimitException;
@@ -112,10 +111,10 @@ public interface Instance {
       RequestMetadata requestMetadata)
       throws IOException, IllegalArgumentException, InterruptedException;
 
-  ListenableFuture<build.buildfarm.v1test.Digest> fetchBlob(
+  ListenableFuture<Digest> fetchBlob(
       Iterable<String> uris,
       Map<String, String> headers,
-      build.buildfarm.v1test.Digest expectedDigest,
+      Digest expectedDigest,
       RequestMetadata requestMetadata);
 
   Write getOperationStreamWrite(String name);
@@ -124,7 +123,7 @@ public interface Instance {
       throws IOException;
 
   ListenableFuture<Void> execute(
-      build.buildfarm.v1test.Digest actionDigest,
+      Digest actionDigest,
       boolean skipCacheLookup,
       ExecutionPolicy executionPolicy,
       ResultsCachePolicy resultsCachePolicy,
@@ -135,6 +134,8 @@ public interface Instance {
   BackplaneStatus backplaneStatus();
 
   boolean putOperation(Operation operation) throws InterruptedException;
+
+  boolean putAndValidateOperation(Operation operation) throws InterruptedException;
 
   boolean pollOperation(String operationName, ExecutionStage.Value stage);
 

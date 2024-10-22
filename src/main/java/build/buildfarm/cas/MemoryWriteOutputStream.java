@@ -19,11 +19,10 @@ import static com.google.common.util.concurrent.Futures.immediateFuture;
 import static com.google.common.util.concurrent.Futures.transformAsync;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 
+import build.bazel.remote.execution.v2.Digest;
 import build.buildfarm.common.DigestUtil;
-import build.buildfarm.common.DigestUtil.HashFunction;
 import build.buildfarm.common.Write;
 import build.buildfarm.common.io.FeedbackOutputStream;
-import build.buildfarm.v1test.Digest;
 import com.google.common.hash.HashingOutputStream;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -34,7 +33,6 @@ import java.util.concurrent.TimeUnit;
 
 class MemoryWriteOutputStream extends FeedbackOutputStream implements Write {
   private final ContentAddressableStorage storage;
-  private final DigestUtil digestUtil;
   private final Digest digest;
   private final ListenableFuture<ByteString> writtenFuture;
   private final ByteString.Output out;
@@ -49,14 +47,13 @@ class MemoryWriteOutputStream extends FeedbackOutputStream implements Write {
     this.storage = storage;
     this.digest = digest;
     this.writtenFuture = writtenFuture;
-    if (digest.getSize() > Integer.MAX_VALUE) {
+    if (digest.getSizeBytes() > Integer.MAX_VALUE) {
       throw new IllegalArgumentException(
           String.format(
-              "content size %d exceeds maximum of %d", digest.getSize(), Integer.MAX_VALUE));
+              "content size %d exceeds maximum of %d", digest.getSizeBytes(), Integer.MAX_VALUE));
     }
-    out = ByteString.newOutput((int) digest.getSize());
-    digestUtil = new DigestUtil(HashFunction.get(digest.getDigestFunction()));
-    hashOut = digestUtil.newHashingOutputStream(out);
+    out = ByteString.newOutput((int) digest.getSizeBytes());
+    hashOut = DigestUtil.forDigest(digest).newHashingOutputStream(out);
     writtenFuture.addListener(
         () -> {
           future.set(null);
@@ -74,12 +71,12 @@ class MemoryWriteOutputStream extends FeedbackOutputStream implements Write {
   }
 
   Digest getActual() {
-    return digestUtil.build(hash(), getCommittedSize());
+    return DigestUtil.buildDigest(hash(), getCommittedSize());
   }
 
   @Override
   public void close() throws IOException {
-    if (getCommittedSize() >= digest.getSize()) {
+    if (getCommittedSize() >= digest.getSizeBytes()) {
       hashOut.close();
       closedFuture.set(null);
       Digest actual = getActual();
@@ -127,7 +124,7 @@ class MemoryWriteOutputStream extends FeedbackOutputStream implements Write {
 
   @Override
   public long getCommittedSize() {
-    return isComplete() ? digest.getSize() : out.size();
+    return isComplete() ? digest.getSizeBytes() : out.size();
   }
 
   @Override
@@ -160,11 +157,11 @@ class MemoryWriteOutputStream extends FeedbackOutputStream implements Write {
   @Override
   public void reset() {
     out.reset();
-    hashOut = digestUtil.newHashingOutputStream(out);
+    hashOut = DigestUtil.forDigest(digest).newHashingOutputStream(out);
   }
 
   @Override
   public ListenableFuture<Long> getFuture() {
-    return Futures.transform(future, result -> digest.getSize(), directExecutor());
+    return Futures.transform(future, result -> digest.getSizeBytes(), directExecutor());
   }
 }

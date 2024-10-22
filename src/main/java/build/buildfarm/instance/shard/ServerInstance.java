@@ -71,7 +71,6 @@ import build.buildfarm.common.BuildfarmExecutors;
 import build.buildfarm.common.CasIndexResults;
 import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.DigestUtil.ActionKey;
-import build.buildfarm.common.DigestUtil.HashFunction;
 import build.buildfarm.common.EntryLimitException;
 import build.buildfarm.common.ExecutionProperties;
 import build.buildfarm.common.IterableScannable;
@@ -249,9 +248,9 @@ public class ServerInstance extends NodeInstance {
   private final com.google.common.cache.LoadingCache<String, Instance> workerStubs;
   private final Thread dispatchedMonitor;
   private final Duration maxActionTimeout;
-  private AsyncCache<build.buildfarm.v1test.Digest, Directory> directoryCache;
-  private AsyncCache<build.buildfarm.v1test.Digest, Command> commandCache;
-  private AsyncCache<build.buildfarm.v1test.Digest, Action> digestToActionCache;
+  private AsyncCache<Digest, Directory> directoryCache;
+  private AsyncCache<Digest, Command> commandCache;
+  private AsyncCache<Digest, Action> digestToActionCache;
   private Cache<RequestMetadata, Boolean> recentCacheServedExecutions;
 
   private final Random rand = new Random();
@@ -294,10 +293,11 @@ public class ServerInstance extends NodeInstance {
     }
   }
 
-  public ServerInstance(String name, String identifier, Runnable onStop)
+  public ServerInstance(String name, String identifier, DigestUtil digestUtil, Runnable onStop)
       throws InterruptedException, ConfigurationException {
     this(
         name,
+        digestUtil,
         createBackplane(identifier),
         onStop,
         /* actionCacheFetchService= */ BuildfarmExecutors.getActionCacheFetchServicePool());
@@ -305,12 +305,14 @@ public class ServerInstance extends NodeInstance {
 
   private ServerInstance(
       String name,
+      DigestUtil digestUtil,
       Backplane backplane,
       Runnable onStop,
       ListeningExecutorService actionCacheFetchService)
       throws InterruptedException {
     this(
         name,
+        digestUtil,
         backplane,
         new ShardActionCache(
             DEFAULT_MAX_LOCAL_ACTION_CACHE_SIZE, backplane, actionCacheFetchService),
@@ -324,6 +326,7 @@ public class ServerInstance extends NodeInstance {
         configs.getServer().isUseDenyList(),
         onStop,
         WorkerStubs.create(
+            digestUtil,
             Duration.newBuilder().setSeconds(configs.getServer().getGrpcTimeout()).build()),
         actionCacheFetchService,
         configs.getServer().isEnsureOutputsPresent());
@@ -350,6 +353,7 @@ public class ServerInstance extends NodeInstance {
 
   public ServerInstance(
       String name,
+      DigestUtil digestUtil,
       Backplane backplane,
       ActionCache actionCache,
       boolean runDispatchedMonitor,
@@ -366,6 +370,7 @@ public class ServerInstance extends NodeInstance {
       boolean ensureOutputsPresent) {
     super(
         name,
+        digestUtil,
         /* contentAddressableStorage= */ null,
         /* actionCache= */ actionCache,
         /* outstandingOperations= */ null,
@@ -719,22 +724,16 @@ public class ServerInstance extends NodeInstance {
   }
 
   @Override
-  public boolean containsBlob(
-      build.buildfarm.v1test.Digest digest, Digest.Builder result, RequestMetadata requestMetadata)
+  public boolean containsBlob(Digest digest, Digest.Builder result, RequestMetadata requestMetadata)
       throws InterruptedException {
     Iterable<Digest> missingOrPopulated;
     try {
-      missingOrPopulated =
-          findMissingBlobs(
-                  ImmutableList.of(DigestUtil.toDigest(digest)),
-                  digest.getDigestFunction(),
-                  requestMetadata)
-              .get();
+      missingOrPopulated = findMissingBlobs(ImmutableList.of(digest), requestMetadata).get();
     } catch (ExecutionException e) {
       throwIfUnchecked(e.getCause());
       throw new RuntimeException(e.getCause());
     }
-    if (digest.getSize() == -1) {
+    if (digest.getSizeBytes() == -1) {
       Digest responseDigest = Iterables.getOnlyElement(missingOrPopulated);
       if (responseDigest.getSizeBytes() == -1) {
         return false;
@@ -747,9 +746,7 @@ public class ServerInstance extends NodeInstance {
 
   @Override
   public ListenableFuture<Iterable<Digest>> findMissingBlobs(
-      Iterable<Digest> blobDigests,
-      DigestFunction.Value digestFunction,
-      RequestMetadata requestMetadata) {
+      Iterable<Digest> blobDigests, RequestMetadata requestMetadata) {
     // Some requests have been blocked, and we should tell the client we refuse to perform a lookup.
     try {
       if (inDenyList(requestMetadata)) {
@@ -765,16 +762,16 @@ public class ServerInstance extends NodeInstance {
     // Empty blobs are an exceptional case. Filter them out.
     // If the user only requested empty blobs we can immediately tell them we already have it.
     Iterable<Digest> nonEmptyDigests =
-        Iterables.filter(blobDigests, digest -> digest.getSizeBytes() != 0);
+        Iterables.filter(blobDigests, (digest) -> digest.getSizeBytes() != 0);
     if (Iterables.isEmpty(nonEmptyDigests)) {
       return immediateFuture(ImmutableList.of());
     }
 
     if (configs.getServer().isFindMissingBlobsViaBackplane()) {
-      return findMissingBlobsViaBackplane(nonEmptyDigests, digestFunction, requestMetadata);
+      return findMissingBlobsViaBackplane(nonEmptyDigests, requestMetadata);
     }
 
-    return findMissingBlobsQueryingEachWorker(nonEmptyDigests, digestFunction, requestMetadata);
+    return findMissingBlobsQueryingEachWorker(nonEmptyDigests, requestMetadata);
   }
 
   class FindMissingResponseEntry {
@@ -797,9 +794,7 @@ public class ServerInstance extends NodeInstance {
   // as a random list to begin our search.  If there are no workers available, tell the client all
   // blobs are missing.
   private ListenableFuture<Iterable<Digest>> findMissingBlobsQueryingEachWorker(
-      Iterable<Digest> nonEmptyDigests,
-      DigestFunction.Value digestFunction,
-      RequestMetadata requestMetadata) {
+      Iterable<Digest> nonEmptyDigests, RequestMetadata requestMetadata) {
     Deque<String> workers;
     try {
       List<String> workersList = new ArrayList<>(backplane.getStorageWorkers());
@@ -817,7 +812,6 @@ public class ServerInstance extends NodeInstance {
     findMissingBlobsOnWorker(
         UUID.randomUUID().toString(),
         nonEmptyDigests,
-        digestFunction,
         workers,
         ImmutableList.builder(),
         Iterables.size(nonEmptyDigests),
@@ -841,16 +835,11 @@ public class ServerInstance extends NodeInstance {
   // out-of-date and the server lies about which blobs are actually present. We provide this
   // alternative strategy for calculating missing blobs.
   private ListenableFuture<Iterable<Digest>> findMissingBlobsViaBackplane(
-      Iterable<Digest> nonEmptyDigests,
-      DigestFunction.Value digestFunction,
-      RequestMetadata requestMetadata) {
+      Iterable<Digest> nonEmptyDigests, RequestMetadata requestMetadata) {
     try {
       Set<Digest> uniqueDigests = new HashSet<>();
       nonEmptyDigests.forEach(uniqueDigests::add);
-      // convert in, convert out?
-      Map<build.buildfarm.v1test.Digest, Set<String>> foundBlobs =
-          backplane.getBlobDigestsWorkers(
-              Iterables.transform(uniqueDigests, d -> DigestUtil.fromDigest(d, digestFunction)));
+      Map<Digest, Set<String>> foundBlobs = backplane.getBlobDigestsWorkers(uniqueDigests);
       Set<String> workerSet = backplane.getStorageWorkers();
       Map<String, Long> workersStartTime = backplane.getWorkersStartTimeInEpochSecs(workerSet);
       Map<Digest, Set<String>> digestAndWorkersMap =
@@ -858,15 +847,11 @@ public class ServerInstance extends NodeInstance {
               .map(
                   digest -> {
                     Set<String> initialWorkers =
-                        foundBlobs.getOrDefault(
-                            DigestUtil.fromDigest(digest, digestFunction), Collections.emptySet());
+                        foundBlobs.getOrDefault(digest, Collections.emptySet());
                     return new AbstractMap.SimpleEntry<>(
                         digest,
                         filterAndAdjustWorkersForDigest(
-                            DigestUtil.fromDigest(digest, digestFunction),
-                            initialWorkers,
-                            workerSet,
-                            workersStartTime));
+                            digest, initialWorkers, workerSet, workersStartTime));
                   })
               .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
@@ -879,7 +864,7 @@ public class ServerInstance extends NodeInstance {
       return transformAsync(
           missingDigestFuture,
           (missingDigest) -> {
-            extendLeaseForDigests(digestAndWorkersMap, digestFunction, requestMetadata);
+            extendLeaseForDigests(digestAndWorkersMap, requestMetadata);
             return immediateFuture(missingDigest);
           },
           // Propagate context values but don't cascade its cancellation for downstream calls.
@@ -891,7 +876,7 @@ public class ServerInstance extends NodeInstance {
   }
 
   private Set<String> filterAndAdjustWorkersForDigest(
-      build.buildfarm.v1test.Digest digest,
+      Digest digest,
       Set<String> originalWorkerSetWithDigest,
       Set<String> activeWorkers,
       Map<String, Long> workersStartTime) {
@@ -899,9 +884,7 @@ public class ServerInstance extends NodeInstance {
     try {
       insertTime = backplane.getDigestInsertTime(digest);
     } catch (IOException e) {
-      log.log(
-          Level.WARNING,
-          format("failed to get digest (%s) insertion time", DigestUtil.toString(digest)));
+      log.log(Level.WARNING, format("failed to get digest (%s) insertion time", digest));
       return Collections.emptySet();
     }
     Set<String> activeWorkersWithDigest =
@@ -918,9 +901,7 @@ public class ServerInstance extends NodeInstance {
             .immutableCopy();
     if (!workersToBeRemoved.isEmpty()) {
       try {
-        log.log(
-            Level.FINE,
-            format("adjusting locations for the digest %s", DigestUtil.toString(digest)));
+        log.log(Level.FINE, format("adjusting locations for the digest %s", digest));
         backplane.adjustBlobLocations(digest, Collections.emptySet(), workersToBeRemoved);
       } catch (IOException e) {
         log.log(
@@ -933,9 +914,7 @@ public class ServerInstance extends NodeInstance {
   }
 
   private void extendLeaseForDigests(
-      Map<Digest, Set<String>> digestAndWorkersMap,
-      DigestFunction.Value digestFunction,
-      RequestMetadata requestMetadata) {
+      Map<Digest, Set<String>> digestAndWorkersMap, RequestMetadata requestMetadata) {
     Map<String, Set<Digest>> workerAndDigestMap = new HashMap<>();
     digestAndWorkersMap.forEach(
         (digest, workers) ->
@@ -944,13 +923,10 @@ public class ServerInstance extends NodeInstance {
                     workerAndDigestMap.computeIfAbsent(worker, w -> new HashSet<>()).add(digest)));
 
     workerAndDigestMap.forEach(
-        (worker, digests) ->
-            workerStub(worker).findMissingBlobs(digests, digestFunction, requestMetadata));
+        (worker, digests) -> workerStub(worker).findMissingBlobs(digests, requestMetadata));
 
     try {
-      backplane.updateDigestsExpiry(
-          Iterables.transform(
-              digestAndWorkersMap.keySet(), d -> DigestUtil.fromDigest(d, digestFunction)));
+      backplane.updateDigestsExpiry(digestAndWorkersMap.keySet());
     } catch (IOException e) {
       log.log(
           Level.WARNING,
@@ -963,7 +939,6 @@ public class ServerInstance extends NodeInstance {
   private void findMissingBlobsOnWorker(
       String requestId,
       Iterable<Digest> blobDigests,
-      DigestFunction.Value digestFunction,
       Deque<String> workers,
       ImmutableList.Builder<FindMissingResponseEntry> responses,
       int originalSize,
@@ -972,7 +947,7 @@ public class ServerInstance extends NodeInstance {
       RequestMetadata requestMetadata) {
     String worker = workers.removeFirst();
     ListenableFuture<Iterable<Digest>> workerMissingBlobsFuture =
-        workerStub(worker).findMissingBlobs(blobDigests, digestFunction, requestMetadata);
+        workerStub(worker).findMissingBlobs(blobDigests, requestMetadata);
 
     Stopwatch stopwatch = Stopwatch.createStarted();
     addCallback(
@@ -992,7 +967,6 @@ public class ServerInstance extends NodeInstance {
               findMissingBlobsOnWorker(
                   requestId,
                   missingDigests,
-                  digestFunction,
                   workers,
                   responses,
                   originalSize,
@@ -1041,7 +1015,6 @@ public class ServerInstance extends NodeInstance {
                 findMissingBlobsOnWorker(
                     requestId,
                     blobDigests,
-                    digestFunction,
                     workers,
                     responses,
                     originalSize,
@@ -1057,7 +1030,7 @@ public class ServerInstance extends NodeInstance {
 
   private void fetchBlobFromWorker(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest blobDigest,
+      Digest blobDigest,
       Deque<String> workers,
       long offset,
       long count,
@@ -1150,8 +1123,7 @@ public class ServerInstance extends NodeInstance {
   }
 
   @Override
-  public ListenableFuture<List<Response>> getAllBlobsFuture(
-      Iterable<Digest> digests, DigestFunction.Value digestFunction) {
+  public ListenableFuture<List<Response>> getAllBlobsFuture(Iterable<Digest> digests) {
     Executor contextExecutor = Context.current().fixedContextExecutor(directExecutor());
     return allAsList(
         Iterables.transform(
@@ -1161,7 +1133,7 @@ public class ServerInstance extends NodeInstance {
                     transform(
                         getBlobFuture(
                             Compressor.Value.IDENTITY,
-                            DigestUtil.fromDigest(digest, digestFunction),
+                            digest,
                             RequestMetadata.getDefaultInstance()),
                         blob -> {
                           Response.Builder response = Response.newBuilder().setDigest(digest);
@@ -1185,7 +1157,7 @@ public class ServerInstance extends NodeInstance {
   @Override
   public void getBlob(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest blobDigest,
+      Digest blobDigest,
       long offset,
       long count,
       ServerCallStreamObserver<ByteString> blobObserver,
@@ -1401,7 +1373,7 @@ public class ServerInstance extends NodeInstance {
   @Override
   public InputStream newBlobInput(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest digest,
+      Digest digest,
       long offset,
       long deadlineAfter,
       TimeUnit deadlineAfterUnits,
@@ -1414,10 +1386,14 @@ public class ServerInstance extends NodeInstance {
   @Override
   public Write getBlobWrite(
       Compressor.Value compressor,
-      build.buildfarm.v1test.Digest digest,
+      Digest digest,
+      DigestFunction.Value digestFunction,
       UUID uuid,
       RequestMetadata requestMetadata)
       throws EntryLimitException {
+    checkState(
+        digestFunction == DigestFunction.Value.UNKNOWN
+            || digestFunction == digestUtil.getDigestFunction());
     try {
       if (inDenyList(requestMetadata)) {
         throw Status.UNAVAILABLE.withDescription(BLOCK_LIST_ERROR).asRuntimeException();
@@ -1425,11 +1401,11 @@ public class ServerInstance extends NodeInstance {
     } catch (IOException e) {
       throw Status.fromThrowable(e).asRuntimeException();
     }
-    if (maxEntrySizeBytes > 0 && digest.getSize() > maxEntrySizeBytes) {
-      throw new EntryLimitException(digest.getSize(), maxEntrySizeBytes);
+    if (maxEntrySizeBytes > 0 && digest.getSizeBytes() > maxEntrySizeBytes) {
+      throw new EntryLimitException(digest.getSizeBytes(), maxEntrySizeBytes);
     }
     // FIXME small blob write to proto cache
-    return writes.get(compressor, digest, uuid, requestMetadata);
+    return writes.get(compressor, digest, digestFunction, uuid, requestMetadata);
   }
 
   protected int getTreeDefaultPageSize() {
@@ -1441,9 +1417,9 @@ public class ServerInstance extends NodeInstance {
   }
 
   protected TokenizableIterator<DirectoryEntry> createTreeIterator(
-      String reason, build.buildfarm.v1test.Digest rootDigest, String pageToken) {
+      String reason, Digest rootDigest, String pageToken) {
     return new TreeIterator(
-        directoryBlobDigest -> {
+        (directoryBlobDigest) -> {
           try {
             return catching(
                     expectDirectory(
@@ -1502,15 +1478,12 @@ public class ServerInstance extends NodeInstance {
 
   @Override
   protected ListenableFuture<Tree> getTreeFuture(
-      String reason,
-      build.buildfarm.v1test.Digest inputRoot,
-      ExecutorService service,
-      RequestMetadata requestMetadata) {
+      String reason, Digest inputRoot, ExecutorService service, RequestMetadata requestMetadata) {
     SettableFuture<Void> future = SettableFuture.create();
     Tree.Builder tree = Tree.newBuilder().setRootDigest(inputRoot);
     Set<Digest> digests = Sets.newConcurrentHashSet();
     Queue<Digest> remaining = new ConcurrentLinkedQueue<>();
-    remaining.offer(DigestUtil.toDigest(inputRoot));
+    remaining.offer(inputRoot);
     Context ctx = Context.current();
     TreeCallback callback =
         new TreeCallback(future) {
@@ -1533,10 +1506,7 @@ public class ServerInstance extends NodeInstance {
                   () ->
                       addCallback(
                           transform(
-                              expectDirectory(
-                                  reason,
-                                  DigestUtil.fromDigest(nextDigest, inputRoot.getDigestFunction()),
-                                  requestMetadata),
+                              expectDirectory(reason, nextDigest, requestMetadata),
                               directory -> new DirectoryEntry(nextDigest, directory),
                               service),
                           this,
@@ -1565,14 +1535,12 @@ public class ServerInstance extends NodeInstance {
   }
 
   ListenableFuture<Directory> expectDirectory(
-      String reason,
-      build.buildfarm.v1test.Digest directoryBlobDigest,
-      RequestMetadata requestMetadata) {
-    if (directoryBlobDigest.getSize() == 0) {
+      String reason, Digest directoryBlobDigest, RequestMetadata requestMetadata) {
+    if (directoryBlobDigest.getSizeBytes() == 0) {
       return immediateFuture(Directory.getDefaultInstance());
     }
 
-    BiFunction<build.buildfarm.v1test.Digest, Executor, CompletableFuture<Directory>> getCallback =
+    BiFunction<Digest, Executor, CompletableFuture<Directory>> getCallback =
         (digest, executor) -> {
           log.log(
               Level.FINER,
@@ -1592,10 +1560,7 @@ public class ServerInstance extends NodeInstance {
 
   @Override
   protected <T> ListenableFuture<T> expect(
-      build.buildfarm.v1test.Digest digest,
-      Parser<T> parser,
-      Executor executor,
-      RequestMetadata requestMetadata) {
+      Digest digest, Parser<T> parser, Executor executor, RequestMetadata requestMetadata) {
     Context.CancellableContext withDeadline =
         Context.current().withDeadlineAfter(60, SECONDS, contextDeadlineScheduler);
     Context previousContext = withDeadline.attach();
@@ -1612,8 +1577,8 @@ public class ServerInstance extends NodeInstance {
   }
 
   ListenableFuture<Command> expectCommand(
-      build.buildfarm.v1test.Digest commandBlobDigest, RequestMetadata requestMetadata) {
-    BiFunction<build.buildfarm.v1test.Digest, Executor, CompletableFuture<Command>> getCallback =
+      Digest commandBlobDigest, RequestMetadata requestMetadata) {
+    BiFunction<Digest, Executor, CompletableFuture<Command>> getCallback =
         (digest, executor) -> {
           Supplier<ListenableFuture<Command>> fetcher =
               () ->
@@ -1625,9 +1590,8 @@ public class ServerInstance extends NodeInstance {
     return toListenableFuture(commandCache.get(commandBlobDigest, getCallback));
   }
 
-  ListenableFuture<Action> expectAction(
-      build.buildfarm.v1test.Digest actionBlobDigest, RequestMetadata requestMetadata) {
-    BiFunction<build.buildfarm.v1test.Digest, Executor, CompletableFuture<Action>> getCallback =
+  ListenableFuture<Action> expectAction(Digest actionBlobDigest, RequestMetadata requestMetadata) {
+    BiFunction<Digest, Executor, CompletableFuture<Action>> getCallback =
         (digest, executor) -> {
           Supplier<ListenableFuture<Action>> fetcher =
               () ->
@@ -1668,15 +1632,14 @@ public class ServerInstance extends NodeInstance {
   private ListenableFuture<QueuedOperation> buildQueuedOperation(
       String operationName,
       Action action,
-      DigestFunction.Value digestFunction,
       ExecutorService service,
       RequestMetadata requestMetadata) {
     QueuedOperation.Builder queuedOperationBuilder = QueuedOperation.newBuilder().setAction(action);
     return transformQueuedOperation(
         operationName,
         action,
-        DigestUtil.fromDigest(action.getCommandDigest(), digestFunction),
-        DigestUtil.fromDigest(action.getInputRootDigest(), digestFunction),
+        action.getCommandDigest(),
+        action.getInputRootDigest(),
         queuedOperationBuilder,
         service,
         requestMetadata);
@@ -1685,20 +1648,20 @@ public class ServerInstance extends NodeInstance {
   private QueuedOperationMetadata buildQueuedOperationMetadata(
       ExecuteOperationMetadata executeOperationMetadata,
       RequestMetadata requestMetadata,
-      build.buildfarm.v1test.Digest queuedOperationDigest) {
+      QueuedOperation queuedOperation) {
     return QueuedOperationMetadata.newBuilder()
         .setExecuteOperationMetadata(
             executeOperationMetadata.toBuilder().setStage(ExecutionStage.Value.QUEUED))
         .setRequestMetadata(requestMetadata)
-        .setQueuedOperationDigest(queuedOperationDigest)
+        .setQueuedOperationDigest(getDigestUtil().compute(queuedOperation))
         .build();
   }
 
   private ListenableFuture<QueuedOperation> transformQueuedOperation(
       String operationName,
       Action action,
-      build.buildfarm.v1test.Digest commandDigest,
-      build.buildfarm.v1test.Digest inputRootDigest,
+      Digest commandDigest,
+      Digest inputRootDigest,
       QueuedOperation.Builder queuedOperationBuilder,
       ExecutorService service,
       RequestMetadata requestMetadata) {
@@ -1737,7 +1700,7 @@ public class ServerInstance extends NodeInstance {
   ExecuteOperationMetadata executeOperationMetadata(
       ExecuteEntry executeEntry, ExecutionStage.Value stage) {
     return ExecuteOperationMetadata.newBuilder()
-        .setActionDigest(DigestUtil.toDigest(executeEntry.getActionDigest()))
+        .setActionDigest(executeEntry.getActionDigest())
         .setStdoutStreamName(executeEntry.getStdoutStreamName())
         .setStderrStreamName(executeEntry.getStderrStreamName())
         .setStage(stage)
@@ -1746,14 +1709,13 @@ public class ServerInstance extends NodeInstance {
   }
 
   private ListenableFuture<QueuedOperationResult> uploadQueuedOperation(
-      DigestUtil digestUtil,
       QueuedOperation queuedOperation,
       ExecuteEntry executeEntry,
       ExecutorService service,
       Duration timeout)
       throws EntryLimitException {
     ByteString queuedOperationBlob = queuedOperation.toByteString();
-    build.buildfarm.v1test.Digest queuedOperationDigest = digestUtil.compute(queuedOperationBlob);
+    Digest queuedOperationDigest = getDigestUtil().compute(queuedOperationBlob);
     QueuedOperationMetadata metadata =
         QueuedOperationMetadata.newBuilder()
             .setExecuteOperationMetadata(
@@ -1774,15 +1736,17 @@ public class ServerInstance extends NodeInstance {
   }
 
   private ListenableFuture<Long> writeBlobFuture(
-      build.buildfarm.v1test.Digest digest,
-      ByteString content,
-      RequestMetadata requestMetadata,
-      Duration timeout)
+      Digest digest, ByteString content, RequestMetadata requestMetadata, Duration timeout)
       throws EntryLimitException {
-    checkState(digest.getSize() == content.size());
+    checkState(digest.getSizeBytes() == content.size());
     SettableFuture<Long> writtenFuture = SettableFuture.create();
     Write write =
-        getBlobWrite(Compressor.Value.IDENTITY, digest, UUID.randomUUID(), requestMetadata);
+        getBlobWrite(
+            Compressor.Value.IDENTITY,
+            digest,
+            digestUtil.getDigestFunction(),
+            UUID.randomUUID(),
+            requestMetadata);
     addCallback(
         write.getFuture(),
         new FutureCallback<Long>() {
@@ -1808,7 +1772,7 @@ public class ServerInstance extends NodeInstance {
 
   private ListenableFuture<QueuedOperation> buildQueuedOperation(
       String operationName,
-      build.buildfarm.v1test.Digest actionDigest,
+      Digest actionDigest,
       ExecutorService service,
       RequestMetadata requestMetadata) {
     return transformAsync(
@@ -1817,8 +1781,7 @@ public class ServerInstance extends NodeInstance {
           if (action == null) {
             return immediateFuture(QueuedOperation.getDefaultInstance());
           }
-          return buildQueuedOperation(
-              operationName, action, actionDigest.getDigestFunction(), service, requestMetadata);
+          return buildQueuedOperation(operationName, action, service, requestMetadata);
         },
         service);
   }
@@ -1900,7 +1863,6 @@ public class ServerInstance extends NodeInstance {
 
   @Override
   protected void validateAction(
-      DigestFunction.Value digestFunction,
       Action action,
       @Nullable Command command,
       Map<Digest, Directory> directoriesIndex,
@@ -1919,8 +1881,7 @@ public class ServerInstance extends NodeInstance {
       }
     }
 
-    super.validateAction(
-        digestFunction, action, command, directoriesIndex, onInputDigest, preconditionFailure);
+    super.validateAction(action, command, directoriesIndex, onInputDigest, preconditionFailure);
   }
 
   private ListenableFuture<Void> validateAndRequeueOperation(
@@ -1935,16 +1896,14 @@ public class ServerInstance extends NodeInstance {
             QueuedOperation.parser(),
             operationTransformService,
             requestMetadata);
-    build.buildfarm.v1test.Digest actionDigest = executeEntry.getActionDigest();
+    Digest actionDigest = executeEntry.getActionDigest();
     ListenableFuture<QueuedOperation> queuedOperationFuture =
         catchingAsync(
             fetchQueuedOperationFuture,
             Throwable.class,
-            (e) -> {
-              log.warning("got to buildQueuedOperation");
-              return buildQueuedOperation(
-                  operation.getName(), actionDigest, operationTransformService, requestMetadata);
-            },
+            (e) ->
+                buildQueuedOperation(
+                    operation.getName(), actionDigest, operationTransformService, requestMetadata),
             directExecutor());
     PreconditionFailure.Builder preconditionFailure = PreconditionFailure.newBuilder();
     ListenableFuture<QueuedOperation> validatedFuture =
@@ -1958,7 +1917,6 @@ public class ServerInstance extends NodeInstance {
             },
             operationTransformService);
 
-    DigestUtil digestUtil = new DigestUtil(HashFunction.get(actionDigest.getDigestFunction()));
     // this little fork ensures that a successfully fetched QueuedOperation
     // will not be reuploaded
     ListenableFuture<QueuedOperationResult> uploadedFuture =
@@ -1983,11 +1941,7 @@ public class ServerInstance extends NodeInstance {
                     Throwable.class,
                     (e) ->
                         uploadQueuedOperation(
-                            digestUtil,
-                            queuedOperation,
-                            executeEntry,
-                            operationTransformService,
-                            timeout),
+                            queuedOperation, executeEntry, operationTransformService, timeout),
                     operationTransformService),
             directExecutor());
 
@@ -2191,7 +2145,7 @@ public class ServerInstance extends NodeInstance {
 
   @Override
   public ListenableFuture<Void> execute(
-      build.buildfarm.v1test.Digest actionDigest,
+      Digest actionDigest,
       boolean skipCacheLookup,
       ExecutionPolicy executionPolicy,
       ResultsCachePolicy resultsCachePolicy,
@@ -2241,10 +2195,13 @@ public class ServerInstance extends NodeInstance {
               .build();
       ExecuteOperationMetadata metadata =
           ExecuteOperationMetadata.newBuilder()
-              .setActionDigest(DigestUtil.toDigest(actionDigest))
+              .setActionDigest(actionDigest)
               .setStdoutStreamName(stdoutStreamName)
               .setStderrStreamName(stderrStreamName)
+<<<<<<< HEAD
               .setDigestFunction(actionDigest.getDigestFunction())
+=======
+>>>>>>> parent of da277fe0 (Support multiple digest functions)
               .build();
       Operation operation =
           Operation.newBuilder().setName(executionName).setMetadata(Any.pack(metadata)).build();
@@ -2272,8 +2229,7 @@ public class ServerInstance extends NodeInstance {
     }
   }
 
-  private static ExecuteResponse denyActionResponse(
-      build.buildfarm.v1test.Digest actionDigest, String description) {
+  private static ExecuteResponse denyActionResponse(Digest actionDigest, String description) {
     PreconditionFailure.Builder preconditionFailureBuilder = PreconditionFailure.newBuilder();
     preconditionFailureBuilder
         .addViolationsBuilder()
@@ -2335,9 +2291,12 @@ public class ServerInstance extends NodeInstance {
 
     ExecuteOperationMetadata completeMetadata =
         ExecuteOperationMetadata.newBuilder()
-            .setActionDigest(DigestUtil.toDigest(actionKey.getDigest()))
+            .setActionDigest(actionKey.getDigest())
             .setStage(ExecutionStage.Value.COMPLETED)
+<<<<<<< HEAD
             .setDigestFunction(actionKey.getDigest().getDigestFunction())
+=======
+>>>>>>> parent of da277fe0 (Support multiple digest functions)
             .build();
 
     Operation completedOperation =
@@ -2360,9 +2319,12 @@ public class ServerInstance extends NodeInstance {
       ActionKey actionKey, Operation operation, RequestMetadata requestMetadata) {
     ExecuteOperationMetadata metadata =
         ExecuteOperationMetadata.newBuilder()
-            .setActionDigest(DigestUtil.toDigest(actionKey.getDigest()))
+            .setActionDigest(actionKey.getDigest())
             .setStage(ExecutionStage.Value.CACHE_CHECK)
+<<<<<<< HEAD
             .setDigestFunction(actionKey.getDigest().getDigestFunction())
+=======
+>>>>>>> parent of da277fe0 (Support multiple digest functions)
             .build();
     try {
       backplane.putOperation(
@@ -2418,19 +2380,22 @@ public class ServerInstance extends NodeInstance {
 
   @VisibleForTesting
   public ListenableFuture<Void> queue(ExecuteEntry executeEntry, Poller poller, Duration timeout) {
-    build.buildfarm.v1test.Digest actionDigest = executeEntry.getActionDigest();
     ExecuteOperationMetadata metadata =
         ExecuteOperationMetadata.newBuilder()
-            .setActionDigest(DigestUtil.toDigest(actionDigest))
+            .setActionDigest(executeEntry.getActionDigest())
             .setStdoutStreamName(executeEntry.getStdoutStreamName())
             .setStderrStreamName(executeEntry.getStderrStreamName())
+<<<<<<< HEAD
             .setDigestFunction(actionDigest.getDigestFunction())
+=======
+>>>>>>> parent of da277fe0 (Support multiple digest functions)
             .build();
     Operation operation =
         Operation.newBuilder()
             .setName(executeEntry.getOperationName())
             .setMetadata(Any.pack(metadata))
             .build();
+    Digest actionDigest = executeEntry.getActionDigest();
     ActionKey actionKey = DigestUtil.asActionKey(actionDigest);
 
     Stopwatch stopwatch = Stopwatch.createStarted();
@@ -2472,8 +2437,7 @@ public class ServerInstance extends NodeInstance {
     } catch (InvalidProtocolBufferException e) {
       return immediateFailedFuture(e);
     }
-    build.buildfarm.v1test.Digest actionDigest = executeEntry.getActionDigest();
-    DigestUtil digestUtil = new DigestUtil(HashFunction.get(actionDigest.getDigestFunction()));
+    Digest actionDigest = metadata.getActionDigest();
     SettableFuture<Void> queueFuture = SettableFuture.create();
     log.log(
         Level.FINER,
@@ -2529,10 +2493,8 @@ public class ServerInstance extends NodeInstance {
                   transformQueuedOperation(
                       operation.getName(),
                       action,
-                      DigestUtil.fromDigest(
-                          action.getCommandDigest(), actionDigest.getDigestFunction()),
-                      DigestUtil.fromDigest(
-                          action.getInputRootDigest(), actionDigest.getDigestFunction()),
+                      action.getCommandDigest(),
+                      action.getInputRootDigest(),
                       queuedOperationBuilder,
                       operationTransformService,
                       requestMetadata),
@@ -2541,7 +2503,7 @@ public class ServerInstance extends NodeInstance {
                           .setQueuedOperation(queuedOperation)
                           .setQueuedOperationMetadata(
                               buildQueuedOperationMetadata(
-                                  metadata, requestMetadata, digestUtil.compute(queuedOperation)))
+                                  metadata, requestMetadata, queuedOperation))
                           .setTransformedIn(
                               Durations.fromMicros(transformStopwatch.elapsed(MICROSECONDS))),
                   operationTransformService);
@@ -2585,7 +2547,7 @@ public class ServerInstance extends NodeInstance {
                               .getQueuedOperationDigest())));
               ByteString queuedOperationBlob =
                   profiledQueuedMetadata.getQueuedOperation().toByteString();
-              build.buildfarm.v1test.Digest queuedOperationDigest =
+              Digest queuedOperationDigest =
                   profiledQueuedMetadata.getQueuedOperationMetadata().getQueuedOperationDigest();
               long startUploadUSecs = stopwatch.elapsed(MICROSECONDS);
               return transform(
