@@ -56,7 +56,6 @@ public class OperationFailer {
         .setStderrStreamName(executeEntry.getStderrStreamName())
         .setStage(stage)
         .setPartialExecutionMetadata(partialExecutionMetadata)
-        .setDigestFunction(actionDigest.getDigestFunction())
         .build();
   }
 }

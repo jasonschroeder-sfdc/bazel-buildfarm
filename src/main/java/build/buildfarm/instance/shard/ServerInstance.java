@@ -1704,7 +1704,6 @@ public class ServerInstance extends NodeInstance {
         .setStdoutStreamName(executeEntry.getStdoutStreamName())
         .setStderrStreamName(executeEntry.getStderrStreamName())
         .setStage(stage)
-        .setDigestFunction(executeEntry.getActionDigest().getDigestFunction())
         .build();
   }
 
@@ -2198,10 +2197,6 @@ public class ServerInstance extends NodeInstance {
               .setActionDigest(actionDigest)
               .setStdoutStreamName(stdoutStreamName)
               .setStderrStreamName(stderrStreamName)
-<<<<<<< HEAD
-              .setDigestFunction(actionDigest.getDigestFunction())
-=======
->>>>>>> parent of da277fe0 (Support multiple digest functions)
               .build();
       Operation operation =
           Operation.newBuilder().setName(executionName).setMetadata(Any.pack(metadata)).build();
@@ -2293,10 +2288,6 @@ public class ServerInstance extends NodeInstance {
         ExecuteOperationMetadata.newBuilder()
             .setActionDigest(actionKey.getDigest())
             .setStage(ExecutionStage.Value.COMPLETED)
-<<<<<<< HEAD
-            .setDigestFunction(actionKey.getDigest().getDigestFunction())
-=======
->>>>>>> parent of da277fe0 (Support multiple digest functions)
             .build();
 
     Operation completedOperation =
@@ -2321,10 +2312,6 @@ public class ServerInstance extends NodeInstance {
         ExecuteOperationMetadata.newBuilder()
             .setActionDigest(actionKey.getDigest())
             .setStage(ExecutionStage.Value.CACHE_CHECK)
-<<<<<<< HEAD
-            .setDigestFunction(actionKey.getDigest().getDigestFunction())
-=======
->>>>>>> parent of da277fe0 (Support multiple digest functions)
             .build();
     try {
       backplane.putOperation(
@@ -2385,10 +2372,6 @@ public class ServerInstance extends NodeInstance {
             .setActionDigest(executeEntry.getActionDigest())
             .setStdoutStreamName(executeEntry.getStdoutStreamName())
             .setStderrStreamName(executeEntry.getStderrStreamName())
-<<<<<<< HEAD
-            .setDigestFunction(actionDigest.getDigestFunction())
-=======
->>>>>>> parent of da277fe0 (Support multiple digest functions)
             .build();
     Operation operation =
         Operation.newBuilder()

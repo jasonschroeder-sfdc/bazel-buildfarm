@@ -22,10 +22,10 @@ import static java.lang.String.format;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.ExecuteResponse;
 import build.bazel.remote.execution.v2.ExecutedActionMetadata;
 import build.buildfarm.common.DigestUtil;
-import build.buildfarm.v1test.Digest;
 import com.google.common.base.Stopwatch;
 import com.google.longrunning.Operation;
 import com.google.protobuf.Any;

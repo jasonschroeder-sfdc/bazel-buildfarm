@@ -507,7 +507,6 @@ public class StubInstance extends InstanceBase {
     FetchBlobRequest request =
         FetchBlobRequest.newBuilder()
             .addAllUris(uris)
-            .setDigestFunction(expectedDigest.getDigestFunction())
             .build();
 
     return transform(
