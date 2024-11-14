@@ -49,9 +49,7 @@
       "matchManagers": [
         "github-actions"
       ],
-      "schedule": [
-        "before 4am on the first day of the month"
-      ],
+      "extends": ["schedule:monthly"],
       "automerge": true
     }
   ]
