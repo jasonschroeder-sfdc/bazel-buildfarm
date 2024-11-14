@@ -45,6 +45,7 @@
       "prConcurrentLimit": 1
     },
     {
+      "groupName": "GitHub Actions",
       "matchManagers": [
         "github-actions"
       ],
