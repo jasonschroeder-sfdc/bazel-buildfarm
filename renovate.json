@@ -12,7 +12,7 @@
   "packageRules": [
     {
       "groupName": "Bazel",
-      "matchManagers": [
+      "matchPackageNames": [
         "bazel"
       ],
       "matchUpdateTypes": [
@@ -39,10 +39,19 @@
     {
       "groupName": "Maven deps",
       "description": "Maven dependencies need to be pinned by 'REPIN=1 bazelisk run @maven//:pin && git add maven_install.json && git commit' to pass CI, then they can be auto-merged after approval",
-      "matchManagers": [
-        "maven"
-      ],
+      "matchManagers": ["bazel"],
+      "matchDatasources": ["maven"],
       "dependencyDashboardApproval": true,
+      "automerge": true,
+      "prConcurrentLimit": 1
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "schedule": [
+        "before 4am on the first day of the month"
+      ],
       "automerge": true
     }
   ]
