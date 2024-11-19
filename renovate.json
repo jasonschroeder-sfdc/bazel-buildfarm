@@ -42,7 +42,8 @@
       "matchDatasources": ["maven"],
       "dependencyDashboardApproval": true,
       "automerge": true,
-      "prConcurrentLimit": 1
+      "prConcurrentLimit": 1,
+      "rebaseWhen": "never"
     },
     {
       "groupName": "Apache commons",
