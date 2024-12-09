@@ -3,6 +3,12 @@ load("@protobuf//bazel:proto_library.bzl", "proto_library")
 
 package(default_visibility = ["//visibility:public"])
 
+filegroup(
+    name = "doxygen_srcs",
+    srcs = glob(["*.java"]),
+    visibility = ["//visibility:public"],
+)
+
 proto_library(
     name = "resource_proto",
     srcs = ["resource.proto"],

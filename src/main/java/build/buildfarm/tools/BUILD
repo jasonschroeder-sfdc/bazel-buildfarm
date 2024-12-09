@@ -1,3 +1,9 @@
+filegroup(
+    name = "doxygen_srcs",
+    srcs = glob(["*.java"]),
+    visibility = ["//visibility:public"],
+)
+
 java_binary(
     name = "bf-mount",
     srcs = ["Mount.java"],

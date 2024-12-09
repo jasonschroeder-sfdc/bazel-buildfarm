@@ -30,6 +30,7 @@ bazel_dep(
     version = "1.19.1",
     dev_dependency = True,
 )
+bazel_dep(name = "rules_doxygen", version = "2.0.0", dev_dependency = True)
 
 # TODO: remove this after https://github.com/bazelbuild/remote-apis/pull/293 is merged
 bazel_dep(name = "bazel_remote_apis", version = "6777112ef7defa6705b1ebd2831d6c7efeb12ba2", repo_name = "remoteapis")
@@ -245,3 +246,6 @@ find_rpm = use_extension("@rules_pkg//toolchains/rpm:rpmbuild_configure.bzl", "f
 use_repo(find_rpm, "rules_pkg_rpmbuild")
 
 register_toolchains("@rules_pkg_rpmbuild//:all")
+
+doxygen_extension = use_extension("@rules_doxygen//:extensions.bzl", "doxygen_extension")
+use_repo(doxygen_extension, "doxygen")

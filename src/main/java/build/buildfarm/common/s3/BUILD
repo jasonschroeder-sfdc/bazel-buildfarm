@@ -1,3 +1,9 @@
+filegroup(
+    name = "doxygen_srcs",
+    srcs = glob(["*.java"]),
+    visibility = ["//visibility:public"],
+)
+
 java_library(
     name = "S3Bucket",
     srcs = ["S3Bucket.java"],

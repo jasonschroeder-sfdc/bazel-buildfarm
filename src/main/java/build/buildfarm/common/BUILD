@@ -1,3 +1,16 @@
+filegroup(
+    name = "doxygen_srcs",
+    srcs = glob(
+        [
+            "*.java",
+            "function/*.java",
+            "io/*.java",
+            "net/*.java",
+        ],
+    ),
+    visibility = ["//visibility:public"],
+)
+
 java_library(
     name = "common",
     srcs = glob(
