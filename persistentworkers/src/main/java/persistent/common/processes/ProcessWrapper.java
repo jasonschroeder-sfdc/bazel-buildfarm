@@ -66,6 +66,7 @@ public class ProcessWrapper implements Closeable {
             .directory(this.workRoot.toFile())
             .redirectError(ProcessBuilder.Redirect.to(this.errorFile.toFile()));
 
+    pb.environment().clear(); // Do not inherit Buildfarm's envs
     pb.environment().putAll(env);
 
     try {
