@@ -42,8 +42,8 @@ public class MapUtils {
    * @note Suggested return identifier: str.
    */
   public static String toString(Map<?, ?> map) {
-    return map.keySet().stream()
-        .map(key -> key + "=" + map.get(key))
+    return map.entrySet().stream()
+        .map(entry -> entry.getKey() + "=" + entry.getValue())
         .collect(Collectors.joining(", ", "{", "}"));
   }
 
