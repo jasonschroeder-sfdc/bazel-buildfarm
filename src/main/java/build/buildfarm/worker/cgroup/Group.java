@@ -22,14 +22,13 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Supplier;
-import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Streams;
 import io.grpc.Deadline;
 import java.io.IOException;
-import java.nio.file.FileAlreadyExistsException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -244,8 +243,11 @@ public final class Group {
 
   /**
    * Move some processes into this CGroup.
+   *
    * @param pids
-   * @see <a href="https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#organizing-processes-and-threads">Organizing Processes and Threads</a>
+   * @see <a
+   *     href="https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#organizing-processes-and-threads">Organizing
+   *     Processes and Threads</a>
    */
   void adoptPids(Iterable<Integer> pids) {
     Path path = getPath().resolve("cgroup.procs");
@@ -257,7 +259,10 @@ public final class Group {
           out.write(String.format("%d\n", pid));
         }
       } catch (IOException e) {
-        log.log(Level.WARNING, "process ID " + pid + " could not be moved to CGroup " + getPath() +"; continuing", e);
+        log.log(
+            Level.WARNING,
+            "process ID " + pid + " could not be moved to CGroup " + getPath() + "; continuing",
+            e);
       }
     }
   }
@@ -311,7 +316,7 @@ public final class Group {
     if (cgroupPath == null) {
       return;
     }
-    //checkNotNull(cgroupPath, "cgroupPath is null");
+    // checkNotNull(cgroupPath, "cgroupPath is null");
     checkNotNull(controllerNames, "Controller names is null");
     checkArgument(!controllerNames.isEmpty(), "Controller names is empty and shouldn't be");
     // set parent folder before we handle this one.
@@ -387,7 +392,7 @@ public final class Group {
       Files.createDirectory(evacuation.getPath());
       evacuation.adoptPids(root.getPids());
       verify(root.isEmpty(), "tried to evacuate root cgroup but there were processes remaining");
-      ensureControllerIsEnabled(root.getPath(), Set.of("cpu","memory"),true);
+      ensureControllerIsEnabled(root.getPath(), Set.of("cpu", "memory"), true);
     }
     if (parent != null) {
       parent.create(controllerName);
@@ -395,7 +400,8 @@ public final class Group {
         Path path = getPath(controllerName);
         try {
           if (!Files.exists(path)) {
-            log.log(Level.FINE, "Creating Group " + getName() + " with controller=" + controllerName);
+            log.log(
+                Level.FINE, "Creating Group " + getName() + " with controller=" + controllerName);
             Files.createDirectory(path);
           }
         } catch (FileAlreadyExistsException e) {
@@ -407,6 +413,14 @@ public final class Group {
         // +<controller1_name> +<controller2_name>
         // (if you wish to remove a controller, prefix with `-` instead of `+`)
         Path cgroupPath = getPath();
+        try {
+          if (!Files.exists(cgroupPath)) {
+            Files.createDirectory(cgroupPath);
+          }
+        } catch (FileAlreadyExistsException e) {
+          // per the avoidance above, we don't care that this already
+          // exists and we lost a race to create it
+        }
         checkState(cgroupPath.startsWith("/sys/fs/cgroup/"));
         checkState(!cgroupPath.endsWith("/"));
         ensureControllerIsEnabled(cgroupPath, Set.of(controllerName));
