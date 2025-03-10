@@ -21,6 +21,7 @@ import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.attribute.UserPrincipal;
 import java.util.logging.Level;
@@ -90,7 +91,11 @@ abstract class Controller implements IOResource {
 
   private void setOwner(String propertyName, UserPrincipal owner) throws IOException {
     Path path = getPath().resolve(propertyName);
-    Files.setOwner(path, owner);
+    try {
+      Files.setOwner(path, owner);
+    } catch (NoSuchFileException nsfe) {
+      this.log.log(Level.FINE, "unable to change owner of " + path + "; path does not exist");
+    }
   }
 
   public void setOwner(UserPrincipal owner) throws IOException {
