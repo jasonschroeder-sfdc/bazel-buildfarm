@@ -97,7 +97,11 @@ abstract class Controller implements IOResource {
     // an execution owner must be able to join a cgroup through group task/proc ownership
     open();
     setOwner("cgroup.procs", owner);
-    setOwner("tasks", owner);
+    if (Group.VERSION == CGroupVersion.CGROUPS_V1) {
+      // "tasks" was removed in cgroups v2. See
+      // https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v2.html#deprecated-v1-core-features
+      setOwner("tasks", owner);
+    }
   }
 
   protected void writeInt(String propertyName, int value) throws IOException {
