@@ -5,6 +5,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -18,6 +19,7 @@ import build.bazel.remote.execution.v2.Compressor;
 import build.bazel.remote.execution.v2.RequestMetadata;
 import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.DigestUtil.HashFunction;
+import build.buildfarm.common.EntryLimitException;
 import build.buildfarm.common.Write;
 import build.buildfarm.common.Write.WriteCompleteException;
 import build.buildfarm.common.io.FeedbackOutputStream;
@@ -38,6 +40,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+import org.mockito.ArgumentCaptor;
 import org.mockito.stubbing.Answer;
 
 @RunWith(JUnit4.class)
@@ -253,5 +256,64 @@ public class WriteStreamObserverTest {
     verify(responseObserver, times(1)).onNext(any(WriteResponse.class));
     verify(responseObserver, times(1)).onCompleted();
     verifyNoMoreInteractions(responseObserver);
+  }
+
+  @Test
+  public void entryLimitExceptionInvalidArgumentStatus() throws Exception {
+    ByteString largeData = ByteString.copyFromUtf8("Large data exceeding limits");
+    Digest largeDigest = DIGEST_UTIL.compute(largeData);
+    UUID uuid = UUID.randomUUID();
+    UploadBlobRequest uploadBlobRequest =
+        UploadBlobRequest.newBuilder()
+            .setBlob(BlobInformation.newBuilder().setDigest(largeDigest))
+            .setUuid(uuid.toString())
+            .build();
+
+    // Set up mocks
+    Instance instance = mock(Instance.class);
+    Write write = mock(Write.class);
+    FeedbackOutputStream outputStream = mock(FeedbackOutputStream.class);
+    StreamObserver<WriteResponse> responseObserver = mock(StreamObserver.class);
+    SettableFuture<Long> future = SettableFuture.create();
+
+    // Configure mock behavior
+    when(write.getFuture()).thenReturn(future);
+    when(write.isComplete()).thenReturn(Boolean.FALSE);
+    when(instance.getBlobWrite(
+            eq(Compressor.Value.IDENTITY), eq(largeDigest), eq(uuid), any(RequestMetadata.class)))
+        .thenReturn(write);
+
+    // The EntryLimitException will be thrown when trying to write data
+    EntryLimitException entryLimitException = new EntryLimitException(largeData.size(), 10);
+    when(write.getOutput(
+            any(Long.class), any(Long.class), any(TimeUnit.class), any(Runnable.class)))
+        .thenReturn(outputStream);
+    doThrow(entryLimitException).when(outputStream).write(any(byte[].class));
+
+    // Create observer and simulate write
+    WriteStreamObserver observer =
+        new WriteStreamObserver(instance, 1, SECONDS, () -> {}, responseObserver);
+    observer.onNext(
+        WriteRequest.newBuilder()
+            .setResourceName(uploadResourceName(uploadBlobRequest))
+            .setData(largeData)
+            .build());
+
+    // Verify that the error is propagated with the expected status code
+    verify(responseObserver, times(1)).onError(any(io.grpc.StatusException.class));
+    verify(responseObserver, never()).onCompleted();
+    verify(responseObserver, never()).onNext(any(WriteResponse.class));
+
+    // Specifically verify that the exception was translated to INVALID_ARGUMENT status
+    ArgumentCaptor<Throwable> throwableCaptor = ArgumentCaptor.forClass(Throwable.class);
+    verify(responseObserver).onError(throwableCaptor.capture());
+    Throwable thrownException = throwableCaptor.getValue();
+
+    // Check that it's a StatusException with INVALID_ARGUMENT code
+    assertThat(thrownException).isInstanceOf(io.grpc.StatusException.class);
+    io.grpc.StatusException statusException = (io.grpc.StatusException) thrownException;
+    assertThat(statusException.getStatus().getCode())
+        .isEqualTo(io.grpc.Status.Code.INVALID_ARGUMENT);
+    assertThat(statusException.getStatus().getDescription()).contains("size " + largeData.size());
   }
 }
