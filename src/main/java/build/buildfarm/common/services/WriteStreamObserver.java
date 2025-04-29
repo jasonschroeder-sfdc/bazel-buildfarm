@@ -291,7 +291,7 @@ public class WriteStreamObserver implements StreamObserver<WriteRequest> {
       }
       boolean isEntryLimitException = t instanceof EntryLimitException;
       if (isEntryLimitException) {
-        t = Status.OUT_OF_RANGE.withDescription(t.getMessage()).asException();
+        t = Status.INVALID_ARGUMENT.withDescription(t.getMessage()).asException();
       }
       responseObserver.onError(t);
       if (isEntryLimitException) {
