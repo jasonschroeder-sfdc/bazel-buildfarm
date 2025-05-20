@@ -95,7 +95,7 @@ public class ExecutionService extends ExecutionGrpc.ExecutionImplBase {
             }
           }
         },
-        Context.current().fixedContextExecutor(directExecutor()));
+        Context.currentContextExecutor(directExecutor()));
     serverCallStreamObserver.setOnCancelHandler(() -> future.cancel(false));
   }
 
