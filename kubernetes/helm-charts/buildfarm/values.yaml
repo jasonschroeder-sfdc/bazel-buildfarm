@@ -33,7 +33,7 @@ server:
     repository: bazelbuild/buildfarm-server
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: ""
+    tag: "@sha256:c4bfbe734bce8eb93db70adfd1ea543fe3e267ff8573ce41b50a3b86025ba182"
   replicaCount: 1
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
@@ -129,7 +129,7 @@ shardWorker:
     repository: bazelbuild/buildfarm-worker
     pullPolicy: IfNotPresent
     # Overrides the image tag whose default is the chart appVersion.
-    tag: ""
+    tag: "@sha256:e007ced88c4e4121e09305460d77cba8ce5a2667d2e3421b7213169e1f9b9352"
   replicaCount: 2
   autoscaling:
     enabled: true
