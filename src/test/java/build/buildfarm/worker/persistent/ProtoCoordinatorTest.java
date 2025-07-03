@@ -47,7 +47,8 @@ public class ProtoCoordinatorTest {
         ImmutableList.of("workerInitArgs"),
         ImmutableMap.of(),
         "executionName",
-        workerFiles);
+        workerFiles,
+        null);
   }
 
   private Path rootDir = null;
@@ -101,7 +102,7 @@ public class ProtoCoordinatorTest {
     WorkerKey key = makeWorkerKey(ctx, workerFiles, fsRoot.resolve("workRootsDir"));
 
     Path workRoot = key.getExecRoot();
-    Path toolsRoot = key.getToolRoot();
+    Path toolsRoot = key.getBasicWorkerKey().getToolRoot();
 
     // Assert: all Tools are copied into "/workRootsDir/*/<tool_inputs_hash>"
     assertThat(toolsRoot.toString()).startsWith(workRoot.toString());
