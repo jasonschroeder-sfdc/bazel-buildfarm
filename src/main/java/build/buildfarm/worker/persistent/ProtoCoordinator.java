@@ -124,7 +124,7 @@ public class ProtoCoordinator extends WorkCoordinator<RequestCtx, ResponseCtx, C
     synchronized (lock) {
       try {
         // Copy tool inputs as needed
-        Path workToolRoot = key.getBasicWorkerKey().getToolRoot();
+        Path workToolRoot = key.getToolRoot();
         for (Path opToolPath : workerFiles.opToolInputs) {
           Path workToolPath = workerFiles.relativizeInput(workToolRoot, opToolPath);
           if (!Files.exists(workToolPath)) {
@@ -150,7 +150,7 @@ public class ProtoCoordinator extends WorkCoordinator<RequestCtx, ResponseCtx, C
       throws IOException {
     log.log(Level.FINE, "loadToolsIntoWorkerRoot() into: " + workerExecRoot);
 
-    Path toolInputRoot = key.getBasicWorkerKey().getToolRoot();
+    Path toolInputRoot = key.getToolRoot();
     for (Path relPath : key.getWorkerFilesWithHashes().keySet()) {
       Path toolInputPath = toolInputRoot.resolve(relPath);
       Path execRootPath = workerExecRoot.resolve(relPath);
