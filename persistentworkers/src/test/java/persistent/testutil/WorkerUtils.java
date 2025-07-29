@@ -13,14 +13,15 @@ public class WorkerUtils {
     return new WorkerKey(
         new BasicWorkerKey(
             initCmd,
-            ImmutableList.of(),
-            ImmutableMap.of(),
-            execDir,
-            "TestOp-Adder",
-            HashCode.fromInt(0),
-            ImmutableSortedMap.of(),
+            /* args= */ ImmutableList.of(),
+            /* env= */ ImmutableMap.of(),
+            /* mnemonic= */ "TestOp-Adder",
             false,
             false),
-        null);
+        /* owner= */ null,
+        /* wrapperArguments= */ ImmutableList.of(),
+        /* execRoot= */ execDir,
+        /* workerFilesCombinedHash= */ HashCode.fromInt(0),
+        /* workerFilesWithHashes= */ ImmutableSortedMap.of());
   }
 }
