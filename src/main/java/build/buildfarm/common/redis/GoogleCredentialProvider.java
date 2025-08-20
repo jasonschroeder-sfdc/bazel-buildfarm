@@ -23,6 +23,8 @@ import java.time.Instant;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Level;
 import lombok.extern.java.Log;
 import redis.clients.jedis.DefaultRedisCredentials;
@@ -47,6 +49,7 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
   private final ScheduledExecutorService service;
   private final Duration refreshDuration;
   private final Duration lifetime;
+  private final ReadWriteLock credentialsLock = new ReentrantReadWriteLock();
 
   private volatile RedisCredentials credentials;
   private volatile Instant lastRefreshInstant;
@@ -73,10 +76,18 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
   }
 
   public RedisCredentials get() {
-    if (hasTokenExpired()) {
-      throw new RuntimeException("Background IAM token refresh failed", lastException);
+    credentialsLock.readLock().lock();
+    try {
+      if (hasTokenExpired()) {
+        throw new RuntimeException("Background IAM token refresh failed", lastException);
+      }
+      if (this.credentials == null) {
+        log.log(Level.WARNING, "Credentials are null");
+      }
+      return this.credentials;
+    } finally {
+      credentialsLock.readLock().unlock();
     }
-    return this.credentials;
   }
 
   private boolean hasTokenExpired() {
@@ -112,10 +123,12 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
   }
 
   private void refreshTokenNow() {
+    credentialsLock.writeLock().lock();
     try {
       log.log(Level.WARNING, "Refreshing IAM token");
       googleCredentials.refresh();
       AccessToken accessToken = googleCredentials.getAccessToken();
+      log.log(Level.INFO, String.format("token expiry: %s", accessToken.getExpirationTime().toString()));
       if (accessToken != null) {
         log.log(Level.INFO, "refreshed access token!");
         String v = accessToken.getTokenValue();
@@ -149,6 +162,8 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
       this.lastException = e;
       // Bubble up for direct feedback
       throw e;
+    } finally {
+      credentialsLock.writeLock().unlock();
     }
   }
 }
