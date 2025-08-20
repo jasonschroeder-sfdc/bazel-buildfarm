@@ -128,7 +128,9 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
       log.log(Level.WARNING, "Refreshing IAM token");
       googleCredentials.refresh();
       AccessToken accessToken = googleCredentials.getAccessToken();
-      log.log(Level.INFO, String.format("token expiry: %s", accessToken.getExpirationTime().toString()));
+      log.log(
+          Level.INFO,
+          String.format("token expiry: %s", accessToken.getExpirationTime().toString()));
       if (accessToken != null) {
         log.log(Level.INFO, "refreshed access token!");
         String v = accessToken.getTokenValue();
