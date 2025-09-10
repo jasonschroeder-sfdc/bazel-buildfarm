@@ -72,25 +72,7 @@ public final class BasicWorkerKey {
     }
 
     BasicWorkerKey workerKey = (BasicWorkerKey) o;
-    if (this.hash != workerKey.hash) {
-      return false;
-    }
-    if (!cmd.equals(workerKey.cmd)) {
-      return false;
-    }
-    if (!args.equals(workerKey.args)) {
-      return false;
-    }
-    if (!cancellable == workerKey.cancellable) {
-      return false;
-    }
-    if (!sandboxed == workerKey.sandboxed) {
-      return false;
-    }
-    if (!env.equals(workerKey.env)) {
-      return false;
-    }
-    return mnemonic.equals(workerKey.mnemonic);
+    return (this.hash != workerKey.hash);
   }
 
   /** Since all fields involved in the {@code hashCode} are final, we cache the result. */
