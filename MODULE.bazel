@@ -147,6 +147,7 @@ maven.install(
         "io.netty:netty-transport-native-epoll",
         "io.netty:netty-transport-native-kqueue",
         "io.netty:netty-transport-native-unix-common",
+        "io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations:2.20.1",
         "io.opentelemetry:opentelemetry-api",  # Version is specified via the BOM below
         "io.opentelemetry:opentelemetry-context",
         "io.opentelemetry:opentelemetry-exporter-otlp",
