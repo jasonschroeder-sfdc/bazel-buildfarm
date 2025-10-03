@@ -1904,9 +1904,9 @@ public abstract class NodeInstance extends InstanceBase {
   }
 
   @Override
-  public PrepareWorkerForGracefulShutDownRequestResults shutDownWorkerGracefully() {
+  public PrepareWorkerForGracefulShutDownRequestResults shutDownWorkerGracefully(String name) {
     throw new UnsupportedOperationException(
-        "NodeInstance doesn't support shutDownWorkerGracefully() method.");
+        "NodeInstance doesn't support shutDownWorkerGracefully(String) method.");
   }
 
   @Override

@@ -1020,7 +1020,7 @@ public class StubInstance extends InstanceBase {
   }
 
   @Override
-  public PrepareWorkerForGracefulShutDownRequestResults shutDownWorkerGracefully() {
+  public PrepareWorkerForGracefulShutDownRequestResults shutDownWorkerGracefully(String name) {
     throwIfStopped();
     return workerControlBlockingStub
         .get()

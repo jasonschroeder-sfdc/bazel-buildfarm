@@ -240,7 +240,7 @@ class DummyInstanceBase extends InstanceBase {
   }
 
   @Override
-  public PrepareWorkerForGracefulShutDownRequestResults shutDownWorkerGracefully() {
+  public PrepareWorkerForGracefulShutDownRequestResults shutDownWorkerGracefully(String name) {
     throw new UnsupportedOperationException();
   }
 
