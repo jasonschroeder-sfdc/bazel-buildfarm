@@ -94,6 +94,7 @@ import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.netty.handler.codec.http.QueryStringDecoder;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.Histogram;
@@ -1319,6 +1320,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
 
   private record FileEntryKey(String key, long size, boolean isExecutable, Digest digest) {}
 
+  @WithSpan
   public void initializeRootDirectory() throws IOException {
     for (Path dir : entryPathStrategy) {
       Files.createDirectories(dir);
@@ -1442,6 +1444,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
     prometheusMetricsThread.start();
   }
 
+  @WithSpan
   protected CacheLoadResults loadCache(
       Consumer<Digest> onStartPut, ExecutorService removeDirectoryService)
       throws IOException, InterruptedException {
@@ -1499,6 +1502,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
     return !name.matches("[0-9a-f]{2}");
   }
 
+  @WithSpan
   private CacheScanResults scanRoot(Consumer<Digest> onStartPut)
       throws IOException, InterruptedException {
     // create thread pool
