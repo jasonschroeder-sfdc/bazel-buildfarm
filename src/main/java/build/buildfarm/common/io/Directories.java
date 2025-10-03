@@ -18,6 +18,8 @@ import static com.google.common.util.concurrent.Futures.immediateFailedFuture;
 import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
 
 import com.google.common.util.concurrent.ListenableFuture;
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.io.IOException;
 import java.nio.file.FileStore;
 import java.nio.file.FileVisitResult;
@@ -141,7 +143,8 @@ public final class Directories {
             null);
   }
 
-  public static void remove(Path directory, FileStore fileStore) throws IOException {
+  @WithSpan
+  public static void remove(@SpanAttribute Path directory, FileStore fileStore) throws IOException {
     Files.walkFileTree(
         directory,
         new SimpleFileVisitor<>() {
