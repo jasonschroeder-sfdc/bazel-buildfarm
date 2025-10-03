@@ -3387,6 +3387,11 @@ public class ServerInstance extends NodeInstance {
     return workerStub(name).getWorkerProfile(name);
   }
 
+    @Override
+    public PrepareWorkerForGracefulShutDownRequestResults shutDownWorkerGracefully(String name) {
+        return workerStub(name).shutDownWorkerGracefully(name);
+    }
+
   @Override
   public ListenableFuture<BatchWorkerProfilesResponse> batchWorkerProfiles(Iterable<String> names) {
     Iterable<ListenableFuture<WorkerProfileMessage>> profiles =
