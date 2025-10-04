@@ -222,7 +222,7 @@ public class NodeInstanceTest {
     }
 
     @Override
-    public PrepareWorkerForGracefulShutDownRequestResults shutDownWorkerGracefully() {
+    public PrepareWorkerForGracefulShutDownRequestResults shutDownWorkerGracefully(String name) {
       throw new UnsupportedOperationException();
     }
 
