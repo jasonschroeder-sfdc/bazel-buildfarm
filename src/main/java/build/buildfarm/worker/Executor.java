@@ -59,6 +59,7 @@ import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
 import com.google.rpc.Code;
 import io.grpc.Deadline;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -131,6 +132,7 @@ class Executor {
     return operationUpdateSuccess;
   }
 
+  @WithSpan
   private long runInterruptible(Stopwatch stopwatch, ResourceLimits limits)
       throws InterruptedException {
     Timestamp executionStartTimestamp = Timestamps.now();
@@ -228,6 +230,7 @@ class Executor {
     }
   }
 
+  @WithSpan
   private static Map<String, Interpolator> createInterpolations(
       Claim claim, Iterable<Property> properties) {
     Map<String, Interpolator> interpolations = new HashMap<>();
@@ -278,6 +281,7 @@ class Executor {
     return arguments.build();
   }
 
+  @WithSpan
   private long executePolled(
       ResourceLimits limits,
       Iterable<ExecutionPolicy> policies,
@@ -426,6 +430,7 @@ class Executor {
     return stopwatch.elapsed(MICROSECONDS) - executeUSecs;
   }
 
+  @WithSpan
   public void run(ResourceLimits limits) {
     long stallUSecs = 0;
     Stopwatch stopwatch = Stopwatch.createStarted();
@@ -503,6 +508,7 @@ class Executor {
   }
 
   @SuppressWarnings("ConstantConditions")
+  @WithSpan
   private Code executeCommand(
       String operationName,
       Path execDir,
