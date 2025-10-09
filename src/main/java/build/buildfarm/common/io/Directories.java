@@ -117,6 +117,7 @@ public final class Directories {
     }
   }
 
+  @WithSpan
   public static ListenableFuture<Void> remove(
       Path path, FileStore fileStore, ExecutorService service) {
     String suffix = UUID.randomUUID().toString();
