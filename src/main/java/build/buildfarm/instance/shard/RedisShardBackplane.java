@@ -14,12 +14,6 @@
 
 package build.buildfarm.instance.shard;
 
-import static com.google.common.collect.Iterables.transform;
-import static java.lang.String.format;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
-import static java.util.concurrent.TimeUnit.SECONDS;
-import static redis.clients.jedis.params.ScanParams.SCAN_POINTER_START;
-
 import build.bazel.remote.execution.v2.ActionResult;
 import build.bazel.remote.execution.v2.ExecutionStage;
 import build.bazel.remote.execution.v2.Platform;
@@ -76,6 +70,12 @@ import com.google.rpc.Code;
 import com.google.rpc.Status;
 import io.grpc.Deadline;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
+import lombok.extern.java.Log;
+import redis.clients.jedis.AbstractPipeline;
+import redis.clients.jedis.UnifiedJedis;
+
+import javax.annotation.Nullable;
+import javax.naming.ConfigurationException;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.AbstractMap;
@@ -95,11 +95,12 @@ import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import javax.annotation.Nullable;
-import javax.naming.ConfigurationException;
-import lombok.extern.java.Log;
-import redis.clients.jedis.AbstractPipeline;
-import redis.clients.jedis.UnifiedJedis;
+
+import static com.google.common.collect.Iterables.transform;
+import static java.lang.String.format;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static redis.clients.jedis.params.ScanParams.SCAN_POINTER_START;
 
 @Log
 public class RedisShardBackplane implements Backplane {
@@ -484,6 +485,7 @@ public class RedisShardBackplane implements Backplane {
   }
 
   @VisibleForTesting
+  @WithSpan
   void start(
       RedisClient client,
       DistributedState state,
@@ -508,6 +510,7 @@ public class RedisShardBackplane implements Backplane {
 
   @SuppressWarnings("ResultOfMethodCallIgnored")
   @Override
+  @WithSpan
   public synchronized void stop() throws InterruptedException {
     if (failsafeOperationThread != null) {
       failsafeOperationThread.interrupt();
@@ -599,6 +602,7 @@ public class RedisShardBackplane implements Backplane {
         });
   }
 
+  @WithSpan
   private boolean addWorkerByType(UnifiedJedis jedis, ShardWorker shardWorker) {
     int type = shardWorker.getWorkerType();
     if (type == 0) {
@@ -1145,6 +1149,7 @@ public class RedisShardBackplane implements Backplane {
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public void rejectOperation(QueueEntry queueEntry) throws IOException {
     String executionName = queueEntry.getExecuteEntry().getOperationName();
     DispatchedOperation o =
@@ -1168,6 +1173,7 @@ public class RedisShardBackplane implements Backplane {
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public boolean pollExecution(QueueEntry queueEntry, ExecutionStage.Value stage, long requeueAt)
       throws IOException {
     String executionName = queueEntry.getExecuteEntry().getOperationName();
@@ -1176,6 +1182,7 @@ public class RedisShardBackplane implements Backplane {
     return client.call(jedis -> pollExecution(jedis, executionName, o));
   }
 
+  @WithSpan
   boolean pollExecution(
       UnifiedJedis jedis, String executionName, DispatchedOperation dispatchedOperation) {
     if (state.dispatchedExecutions.exists(jedis, executionName)) {
@@ -1190,18 +1197,21 @@ public class RedisShardBackplane implements Backplane {
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public @Nullable Operation mergeExecution(ActionKey actionKey) throws IOException {
     return client.call(jedis -> state.executions.merge(jedis, actionKey.toString()));
   }
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public void unmergeExecution(ActionKey actionKey) throws IOException {
     client.run(jedis -> state.executions.unmerge(jedis, actionKey.toString()));
   }
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public boolean prequeue(ExecuteEntry executeEntry, Operation execution, boolean ignoreMerge)
       throws IOException {
     String toolInvocationId = executeEntry.getRequestMetadata().getToolInvocationId();
@@ -1262,12 +1272,14 @@ public class RedisShardBackplane implements Backplane {
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public void completeOperation(String executionName) throws IOException {
     client.run(jedis -> completeOperation(jedis, executionName));
   }
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public void deleteOperation(String executionName) throws IOException {
     Operation o =
         Operation.newBuilder()
@@ -1303,6 +1315,7 @@ public class RedisShardBackplane implements Backplane {
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public boolean isBlocklisted(RequestMetadata requestMetadata) throws IOException {
     if (requestMetadata.getToolInvocationId().isEmpty()
         && requestMetadata.getActionId().isEmpty()) {
@@ -1324,12 +1337,14 @@ public class RedisShardBackplane implements Backplane {
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public boolean canQueue() throws IOException {
     return client.call(jedis -> state.executionQueue.canQueue(jedis));
   }
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public boolean canPrequeue() throws IOException {
     return client.call(jedis -> state.prequeue.canQueue(jedis));
   }
@@ -1388,6 +1403,7 @@ public class RedisShardBackplane implements Backplane {
   }
 
   @Override
+  @WithSpan
   public void indexCorrelatedInvocationsId(
       String correlatedInvocationsId, Map<String, List<String>> indexScopeValues)
       throws IOException {
@@ -1403,6 +1419,7 @@ public class RedisShardBackplane implements Backplane {
   }
 
   @Override
+  @WithSpan
   public void addToolInvocationId(
       String toolInvocationId, String correlatedInvocationsId, ToolDetails toolDetails)
       throws IOException {
