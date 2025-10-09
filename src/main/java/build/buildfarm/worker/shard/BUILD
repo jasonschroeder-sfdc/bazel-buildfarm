@@ -35,6 +35,7 @@ java_library(
         "@buildfarm_maven//:io_grpc_grpc_protobuf",
         "@buildfarm_maven//:io_grpc_grpc_services",
         "@buildfarm_maven//:io_grpc_grpc_stub",
+        "@buildfarm_maven//:io_opentelemetry_instrumentation_opentelemetry_instrumentation_annotations",
         "@buildfarm_maven//:io_prometheus_simpleclient",
         "@buildfarm_maven//:javax_annotation_javax_annotation_api",
         "@buildfarm_maven//:org_projectlombok_lombok",
