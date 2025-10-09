@@ -85,6 +85,7 @@ import com.google.rpc.PreconditionFailure;
 import io.grpc.Deadline;
 import io.grpc.Status;
 import io.grpc.StatusException;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import io.prometheus.client.Counter;
 import java.io.File;
 import java.io.IOException;
@@ -914,6 +915,7 @@ class ShardWorkerContext implements WorkerContext {
   // This has become an extremely awkward mechanism
   // an exec dir should be associatable with all of these parameters
   // and the arguments should be more structured and less susceptible to ordering details
+  @WithSpan
   @Override
   public IOResource limitExecution(
       String operationName,

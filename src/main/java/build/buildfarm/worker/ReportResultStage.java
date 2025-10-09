@@ -14,6 +14,8 @@
 
 package build.buildfarm.worker;
 
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.Histogram;
 import java.util.logging.Logger;
@@ -50,15 +52,17 @@ public class ReportResultStage extends SuperscalarPipelineStage {
     return log;
   }
 
-  synchronized int removeAndRelease(String operationName) {
+  @WithSpan
+  synchronized int removeAndRelease(@SpanAttribute String operationName) {
     releaseClaim(operationName, 1);
     slotUsage--;
     reportResultSlotUsage.set(slotUsage);
     return slotUsage;
   }
 
+  @WithSpan
   public void releaseResultReporter(
-      String operationName, long usecs, long stallUSecs, boolean success) {
+      @SpanAttribute String operationName, long usecs, long stallUSecs, boolean success) {
     int size = removeAndRelease(operationName);
     reportResultTime.observe(usecs / 1000.0);
     reportResultStallTime.observe(stallUSecs / 1000.0);
@@ -75,6 +79,7 @@ public class ReportResultStage extends SuperscalarPipelineStage {
   }
 
   @Override
+  @WithSpan
   protected void iterate() throws InterruptedException {
     if (!workerContext.inGracefulShutdown() && isPaused()) {
       return;
