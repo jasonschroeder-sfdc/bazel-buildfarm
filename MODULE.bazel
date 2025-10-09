@@ -130,6 +130,8 @@ maven.install(
         "io.netty:netty-transport-native-kqueue",
         "io.netty:netty-transport-native-unix-common",
         "io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations:2.20.1",
+        "io.opentelemetry:opentelemetry-api",  # Version is specified via the BOM below
+        "io.opentelemetry:opentelemetry-context",  # Version is specified via the BOM below
         "io.prometheus:simpleclient:0.16.0",
         "io.prometheus:simpleclient_hotspot:0.16.0",
         "io.prometheus:simpleclient_httpserver:0.16.0",
@@ -164,6 +166,7 @@ maven.install(
         "com.google.auth:google-auth-library-bom:1.23.0",
         "io.grpc:grpc-bom:1.75.0",
         "io.netty:netty-bom:4.1.108.Final",
+        "io.opentelemetry:opentelemetry-bom:1.54.1",
     ],
     fail_if_repin_required = True,  # TO RE-PIN: REPIN=1 bazel run @buildfarm_maven//:pin
     generate_compat_repositories = True,
