@@ -23,6 +23,7 @@ import build.buildfarm.common.Visitor;
 import build.buildfarm.v1test.QueueStatus;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -488,6 +489,7 @@ public class BalancedRedisQueue {
    * @details Enacts a visitor over each element in the dequeue.
    * @param visitor A visitor for each visited element in the queue.
    */
+  @WithSpan
   public void visitDequeue(UnifiedJedis unified, Visitor<BalancedQueueEntry> visitor) {
     for (String queue : fullIterationQueueOrder()) {
       try (Jedis jedis = getJedisFromKey(unified, queue)) {

@@ -26,6 +26,8 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.google.protobuf.Duration;
 import com.google.protobuf.util.Durations;
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -53,7 +55,9 @@ class DispatchedMonitor implements Runnable {
     this.intervalSeconds = intervalSeconds;
   }
 
-  private ListenableFuture<Void> requeueDispatchedExecution(DispatchedOperation o, long now) {
+  @WithSpan
+  private ListenableFuture<Void> requeueDispatchedExecution(
+      @SpanAttribute DispatchedOperation o, long now) {
     QueueEntry queueEntry = o.getQueueEntry();
     String operationName = queueEntry.getExecuteEntry().getOperationName();
 
@@ -71,7 +75,8 @@ class DispatchedMonitor implements Runnable {
     return requeuedFuture;
   }
 
-  private void logOverdueOperation(DispatchedOperation o, long now) {
+  @WithSpan
+  private void logOverdueOperation(@SpanAttribute DispatchedOperation o, long now) {
     // log that the dispatched operation is overdue in order to indicate that it should be requeued.
     String operationName = o.getQueueEntry().getExecuteEntry().getOperationName();
     long overdue_amount = now - o.getRequeueAt();
@@ -92,6 +97,7 @@ class DispatchedMonitor implements Runnable {
     }
   }
 
+  @WithSpan
   private ListenableFuture<List<Void>> submitAll() {
     ImmutableList.Builder<ListenableFuture<Void>> requeuedFutures = ImmutableList.builder();
     try {
