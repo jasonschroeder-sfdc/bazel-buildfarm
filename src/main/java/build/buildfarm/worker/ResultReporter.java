@@ -39,6 +39,7 @@ import io.grpc.Deadline;
 import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
 import io.grpc.protobuf.StatusProto;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.io.IOException;
 import java.nio.channels.ClosedByInterruptException;
 import java.util.concurrent.Executor;
@@ -65,6 +66,7 @@ class ResultReporter implements Runnable {
   }
 
   @Override
+  @WithSpan
   public void run() {
     long stallUSecs = 0;
     String executionName = executionContext.queueEntry.getExecuteEntry().getOperationName();
@@ -141,6 +143,7 @@ class ResultReporter implements Runnable {
     }
   }
 
+  @WithSpan
   private long reportPolled(Stopwatch stopwatch) throws InterruptedException {
     String operationName = executionContext.operation.getName();
 

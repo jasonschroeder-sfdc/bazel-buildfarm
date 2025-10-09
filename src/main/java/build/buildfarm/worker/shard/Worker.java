@@ -124,6 +124,7 @@ import io.opentelemetry.context.Context;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.resources.Resource;
 import io.opentelemetry.sdk.trace.SdkTracerProvider;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import java.io.File;
@@ -683,6 +684,7 @@ public final class Worker extends LoggingMain {
                 return isPaused;
               }
 
+              @WithSpan
               void registerIfExpired() {
                 long now = System.currentTimeMillis();
                 if (now >= workerRegistrationExpiresAt
