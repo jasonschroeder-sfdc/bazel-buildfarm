@@ -45,6 +45,9 @@ import com.google.protobuf.util.Timestamps;
 import com.google.rpc.Code;
 import com.google.rpc.Status;
 import io.grpc.Deadline;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -212,6 +215,7 @@ public class InputFetcher implements Runnable {
   }
 
   @VisibleForTesting
+  @WithSpan
   long fetchPolled(Stopwatch stopwatch) throws InterruptedException {
     Timestamp inputFetchStart = Timestamps.now();
 
@@ -259,6 +263,10 @@ public class InputFetcher implements Runnable {
         status.setCode(Code.INTERNAL.getNumber());
         log.log(Level.SEVERE, format("error creating exec dir for %s", executionName), e);
       }
+      Span.current()
+          .setStatus(StatusCode.ERROR)
+          .setAttribute("operationName", executionName)
+          .recordException(e);
       // populate the inputFetch complete to know how long it took before error
       executedAction.setInputFetchCompletedTimestamp(Timestamps.now());
       failOperation(executedAction.build(), status.build());
