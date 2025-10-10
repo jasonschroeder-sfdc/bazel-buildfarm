@@ -21,6 +21,8 @@ import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.UncheckedExecutionException;
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -106,8 +108,9 @@ public final class Utils {
   }
 
   /* listing paths / dirents */
-  public static List<Dirent> readdir(Path path, boolean followSymlinks, FileStore fileStore)
-      throws IOException {
+  @WithSpan
+  public static List<Dirent> readdir(
+      @SpanAttribute Path path, boolean followSymlinks, FileStore fileStore) throws IOException {
     List<Dirent> dirents = new ArrayList<>();
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(path)) {
       for (Path file : stream) {
