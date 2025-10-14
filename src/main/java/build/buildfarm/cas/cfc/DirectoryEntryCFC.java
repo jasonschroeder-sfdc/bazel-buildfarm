@@ -43,8 +43,6 @@ import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.grpc.Deadline;
-import io.opentelemetry.instrumentation.annotations.SpanAttribute;
-import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -100,9 +98,7 @@ public class DirectoryEntryCFC extends CASFileCache {
         externalInputStreamFactory);
   }
 
-  @WithSpan
-  private void computeDirectory(
-      @SpanAttribute Path path, ImmutableList.Builder<Path> invalidDirectories) {
+  private void computeDirectory(Path path, ImmutableList.Builder<Path> invalidDirectories) {
     String key = path.getFileName().toString();
     try {
       AtomicLong blobSizeInBytes = new AtomicLong();
@@ -141,7 +137,6 @@ public class DirectoryEntryCFC extends CASFileCache {
   }
 
   @Override
-  @WithSpan
   protected List<Path> computeDirectories(CacheScanResults cacheScanResults)
       throws InterruptedException {
     // create thread pool
