@@ -91,15 +91,26 @@ public class InputFetchStage extends SuperscalarPipelineStage {
       return;
     }
     ExecutionContext executionContext = take();
-    InputFetcher inputFetcher =
-        new InputFetcher(workerContext, executionContext, this, pollerExecutor);
-    inputFetchers.put(executionContext.operation.getName(), inputFetcher);
+    try {
+      InputFetcher inputFetcher =
+          new InputFetcher(workerContext, executionContext, this, pollerExecutor);
+      inputFetchers.put(executionContext.operation.getName(), inputFetcher);
 
-    synchronized (this) {
-      slotUsage++;
-      inputFetchSlotUsage.set(slotUsage);
-      start(executionContext.queueEntry.getExecuteEntry().getOperationName(), getUsage(slotUsage));
-      executor.execute(inputFetcher);
+      synchronized (this) {
+        slotUsage++;
+        inputFetchSlotUsage.set(slotUsage);
+        start(
+            executionContext.queueEntry.getExecuteEntry().getOperationName(), getUsage(slotUsage));
+        executor.execute(inputFetcher);
+      }
+    } catch (Exception e) {
+      // Exception before worker could run - route to error pipeline to ensure deactivation
+      log.severe(
+          "Failed to submit input fetcher for "
+              + executionContext.operation.getName()
+              + ", routing to error: "
+              + e.getMessage());
+      error.put(executionContext);
     }
   }
 }

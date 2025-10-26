@@ -110,14 +110,25 @@ public class ExecuteActionStage extends SuperscalarPipelineStage {
       return;
     }
     ExecutionContext executionContext = take();
-    ResourceLimits limits = workerContext.commandExecutionSettings(executionContext.command);
-    Executor actionExecutor = new Executor(workerContext, executionContext, this, pollerExecutor);
+    try {
+      ResourceLimits limits = workerContext.commandExecutionSettings(executionContext.command);
+      Executor actionExecutor = new Executor(workerContext, executionContext, this, pollerExecutor);
 
-    synchronized (this) {
-      int slotUsage = executorClaims.addAndGet(limits.cpu.claimed);
-      executionSlotUsage.set(slotUsage);
-      start(executionContext.operation.getName(), getUsage(slotUsage));
-      executor.execute(() -> actionExecutor.run(limits));
+      synchronized (this) {
+        int slotUsage = executorClaims.addAndGet(limits.cpu.claimed);
+        executionSlotUsage.set(slotUsage);
+        start(executionContext.operation.getName(), getUsage(slotUsage));
+        executor.execute(() -> actionExecutor.run(limits));
+      }
+    } catch (Exception e) {
+      // Exception before worker could run - route to error pipeline to ensure deactivation
+      log.log(
+          Level.SEVERE,
+          "Failed to submit executor for "
+              + executionContext.operation.getName()
+              + ", routing to error",
+          e);
+      error.put(executionContext);
     }
   }
 

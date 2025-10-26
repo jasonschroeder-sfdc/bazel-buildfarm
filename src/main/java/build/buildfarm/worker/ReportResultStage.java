@@ -18,6 +18,7 @@ import io.opentelemetry.instrumentation.annotations.SpanAttribute;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.Histogram;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.concurrent.GuardedBy;
 import lombok.extern.java.Log;
@@ -85,14 +86,26 @@ public class ReportResultStage extends SuperscalarPipelineStage {
       return;
     }
     ExecutionContext executionContext = take();
-    ResultReporter reporter =
-        new ResultReporter(workerContext, executionContext, this, pollerExecutor);
+    try {
+      ResultReporter reporter =
+          new ResultReporter(workerContext, executionContext, this, pollerExecutor);
 
-    synchronized (this) {
-      slotUsage++;
-      reportResultSlotUsage.set(slotUsage);
-      start(executionContext.queueEntry.getExecuteEntry().getOperationName(), getUsage(slotUsage));
-      executor.execute(reporter);
+      synchronized (this) {
+        slotUsage++;
+        reportResultSlotUsage.set(slotUsage);
+        start(
+            executionContext.queueEntry.getExecuteEntry().getOperationName(), getUsage(slotUsage));
+        executor.execute(reporter);
+      }
+    } catch (Exception e) {
+      // Exception before worker could run - route to error pipeline to ensure deactivation
+      log.log(
+          Level.SEVERE,
+          "Failed to submit result reporter for "
+              + executionContext.operation.getName()
+              + ", routing to error",
+          e);
+      error.put(executionContext);
     }
   }
 }
