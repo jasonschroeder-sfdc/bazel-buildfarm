@@ -1336,11 +1336,11 @@ public class RedisShardBackplane implements Backplane {
     return isActionBlocked || isInvocationBlocked;
   }
 
-  @SuppressWarnings("ConstantConditions")
   @Override
   @WithSpan
   public boolean canQueue() throws IOException {
-    return client.call(jedis -> state.executionQueue.canQueue(jedis));
+    return state.executionQueue.getMaxQueueSize() < 0
+        || state.executionQueue.canQueue(client.call(jedis -> jedis));
   }
 
   @SuppressWarnings("ConstantConditions")
