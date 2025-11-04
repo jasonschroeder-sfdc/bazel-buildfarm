@@ -107,6 +107,31 @@ public class RedisClient implements Closeable {
     return result;
   }
 
+  /**
+   * Executes a Redis operation with automatic exception handling and lifecycle management.
+   *
+   * <p>This method implements the loan pattern, providing the caller with access to a UnifiedJedis
+   * instance while handling common error scenarios and exception translation.
+   *
+   * <p>Example usage:
+   *
+   * <pre>{@code
+   * String value = client.call(jedis -> jedis.get("mykey"));
+   * Long result = client.call(jedis -> jedis.lpush("mylist", "item1", "item2"));
+   * }</pre>
+   *
+   * @param <T> the return type of the Redis operation
+   * @param withJedis a functional callback that receives a UnifiedJedis instance and performs Redis
+   *     operations
+   * @return the result of the Redis operation
+   * @throws IOException if the client is closed, or if Redis connection/configuration errors occur.
+   *     The exception will contain an appropriate gRPC Status:
+   *     <ul>
+   *       <li>{@code UNAVAILABLE} - connection failures, Redis misconfiguration, cluster operation
+   *           errors
+   *       <li>{@code DEADLINE_EXCEEDED} - socket timeout errors
+   *     </ul>
+   */
   @SuppressWarnings("ConstantConditions")
   public <T> T call(JedisContext<T> withJedis) throws IOException {
     throwIfClosed();
