@@ -103,7 +103,6 @@ public class CFCExecFileSystem implements ExecFileSystem {
     return owners.get(name);
   }
 
-  @SuppressWarnings("ConstantConditions")
   @Override
   @WithSpan
   public ListenableFuture<Void> start(

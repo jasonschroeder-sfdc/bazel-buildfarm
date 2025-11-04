@@ -444,7 +444,6 @@ public class RedisShardBackplane implements Backplane {
     subscriptionThread.start();
   }
 
-  @SuppressWarnings("ConstantConditions")
   private void startFailsafeOperationThread() {
     failsafeOperationThread =
         new Thread(

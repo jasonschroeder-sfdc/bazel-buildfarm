@@ -1595,7 +1595,6 @@ public abstract class CASFileCache implements ContentAddressableStorage {
     }
   }
 
-  @SuppressWarnings("ConstantConditions")
   protected abstract List<Path> computeDirectories(CacheScanResults cacheScanResults)
       throws InterruptedException;
 
