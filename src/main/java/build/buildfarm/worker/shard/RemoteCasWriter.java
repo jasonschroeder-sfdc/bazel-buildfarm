@@ -87,7 +87,8 @@ public class RemoteCasWriter implements CasWriter {
     }
   }
 
-  private long writeToCasMember(Digest digest, InputStream in)
+  @WithSpan
+  private long writeToCasMember(@SpanAttribute Digest digest, InputStream in)
       throws IOException, InterruptedException {
     // create a write for inserting into another CAS member.
     String workerName = getRandomWorker();
@@ -98,6 +99,7 @@ public class RemoteCasWriter implements CasWriter {
       return streamIntoWriteFuture(in, write, digest).get();
     } catch (ExecutionException e) {
       Throwable cause = e.getCause();
+      Span.current().setStatus(StatusCode.ERROR).recordException(cause);
       Throwables.throwIfInstanceOf(cause, IOException.class);
       // prevent a discard of this frame
       Status status = Status.fromThrowable(cause);
@@ -119,9 +121,9 @@ public class RemoteCasWriter implements CasWriter {
     try (InputStream in = content.newInput()) {
       retrier.execute(() -> writeToCasMember(digest, in));
     } catch (RetryException e) {
-      Span.current().setStatus(StatusCode.ERROR).recordException(e);
 
       Throwable cause = e.getCause();
+      Span.current().setStatus(StatusCode.ERROR).recordException(cause);
       Throwables.throwIfInstanceOf(cause, IOException.class);
       Throwables.throwIfUnchecked(cause);
       throw new IOException(cause);
