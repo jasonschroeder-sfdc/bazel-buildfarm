@@ -84,6 +84,10 @@ import com.google.rpc.PreconditionFailure;
 import io.grpc.Deadline;
 import io.grpc.Status;
 import io.grpc.StatusException;
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import io.prometheus.client.Counter;
 import java.io.File;
@@ -270,6 +274,15 @@ class ShardWorkerContext implements WorkerContext {
             success =
                 operationPoller.poll(queueEntry, stage, System.currentTimeMillis() + 30 * 1000);
           } catch (IOException e) {
+            Span.current()
+                .setStatus(StatusCode.ERROR)
+                .recordException(
+                    e,
+                    Attributes.of(
+                        AttributeKey.stringKey("name"),
+                        name,
+                        AttributeKey.stringKey("operationName"),
+                        operationName));
             log.log(
                 Level.SEVERE, format("%s: poller: error while polling %s", name, operationName), e);
           }
@@ -286,6 +299,14 @@ class ShardWorkerContext implements WorkerContext {
           return success;
         },
         () -> {
+          Span.current()
+              .addEvent("Deadline Expired")
+              .setAllAttributes(
+                  Attributes.of(
+                      AttributeKey.stringKey("name"),
+                      name,
+                      AttributeKey.stringKey("operationName"),
+                      operationName));
           log.log(
               Level.WARNING, format("%s: poller: Deadline expired for %s", name, operationName));
           onFailure.run();
