@@ -33,7 +33,11 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import lombok.Getter;
@@ -56,9 +60,13 @@ import redis.clients.jedis.util.JedisClusterCRC16;
  *     the same underlying redis queues.
  */
 public class BalancedRedisQueue {
+  private static final Logger log = Logger.getLogger(BalancedRedisQueue.class.getName());
   private static final Duration START_TIMEOUT = Duration.ofSeconds(1);
 
   private static final Duration MAX_TIMEOUT = Duration.ofSeconds(8);
+
+  // Maximum timeout for FutureTask.get() to prevent indefinite blocking on hung Redis connections
+  private static final Duration FUTURE_TASK_TIMEOUT = Duration.ofSeconds(120);
 
   public record BalancedQueueEntry(String queue, String value) {}
 
@@ -221,7 +229,40 @@ public class BalancedRedisQueue {
   private <T> T getBlockingReply(Future<T> reply, Runnable onInterrupted)
       throws InterruptedException {
     try {
-      return reply.get();
+      // Add timeout to prevent indefinite blocking on hung Redis connections
+      // If the Redis connection is hung, blmove() will block indefinitely waiting for a response.
+      // By adding a timeout here, we can detect hung connections and recover.
+      return reply.get(FUTURE_TASK_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS);
+    } catch (TimeoutException e) {
+      // Timeout occurred - likely due to a hung Redis connection
+      log.log(
+          Level.WARNING,
+          "Timeout waiting for Redis operation to complete after "
+              + FUTURE_TASK_TIMEOUT.getSeconds()
+              + " seconds. This may indicate a hung Redis connection. Cancelling operation and"
+              + " disconnecting.",
+          e);
+      try {
+        // Cancel the future task to stop the blocking Redis operation
+        boolean cancelled = reply.cancel(true);
+        if (!cancelled) {
+          log.log(
+              Level.WARNING,
+              "Failed to cancel FutureTask - it may have already completed or started");
+        }
+        // Disconnect the Jedis connection to force it to be recreated
+        onInterrupted.run();
+      } catch (Exception cleanupException) {
+        log.log(
+            Level.WARNING,
+            "Error during cleanup after timeout: " + cleanupException.getMessage(),
+            cleanupException);
+      }
+      // Throw InterruptedException to allow the caller to retry with a fresh connection
+      throw new InterruptedException(
+          "Redis operation timed out after "
+              + FUTURE_TASK_TIMEOUT.getSeconds()
+              + " seconds. Connection may be hung.");
     } catch (ExecutionException e) {
       Throwable cause = e.getCause();
       Throwables.throwIfUnchecked(cause);

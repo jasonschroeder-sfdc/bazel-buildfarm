@@ -660,6 +660,22 @@ public class ServerInstance extends NodeInstance {
                       } catch (IOException e) {
                         transformTokensQueue.take();
                         // problems interacting with backplane
+                      } catch (InterruptedException e) {
+                        transformTokensQueue.take();
+                        // InterruptedException from deprequeueOperation (e.g., due to hung Redis
+                        // connection timeout). If we're stopping, propagate to exit the thread.
+                        // Otherwise, log and retry on next iteration.
+                        if (stopping) {
+                          // If we're stopping, propagate the interruption to exit the thread
+                          throw e;
+                        }
+                        log.log(
+                            Level.WARNING,
+                            "OperationQueuer: Interrupted during deprequeueOperation (likely due to"
+                                + " hung Redis connection timeout), will retry: "
+                                + e.getMessage(),
+                            e);
+                        // Continue to next iteration to retry
                       } finally {
                         stopwatch.reset();
                       }
