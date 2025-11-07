@@ -111,7 +111,6 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
           && this.refreshDuration != null
           && Instant.now().isBefore(this.lastRefreshInstant.plus(this.refreshDuration))) {
         // nothing to do
-        log.log(Level.INFO, "No need to refresh IAM token");
         return;
       }
       refreshTokenNow();
@@ -128,9 +127,7 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
       log.log(Level.WARNING, "Refreshing IAM token");
       googleCredentials.refresh();
       AccessToken accessToken = googleCredentials.getAccessToken();
-      log.log(Level.INFO, String.format("token expiry: %s", accessToken.getExpirationTime().toString()));
       if (accessToken != null) {
-        log.log(Level.INFO, "refreshed access token!");
         String v = accessToken.getTokenValue();
 
         // got a successful token refresh
@@ -144,8 +141,10 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
                 + lastRefreshInstant
                 + "], refreshDuration ["
                 + this.refreshDuration
-                + "] and lifetime ["
+                + "], lifetime ["
                 + this.lifetime
+                + "] and expiration time ["
+                + accessToken.getExpirationTime().toString()
                 + "]");
       } else {
         log.log(Level.WARNING, "access token was null");
