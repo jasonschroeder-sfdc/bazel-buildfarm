@@ -43,6 +43,8 @@ import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import io.grpc.Deadline;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -129,6 +131,8 @@ public class DirectoryEntryCFC extends CASFileCache {
         sizeInBytes += e.size;
       }
     } catch (Exception e) {
+      Span.current().setStatus(StatusCode.ERROR).recordException(e);
+
       log.log(Level.SEVERE, "error processing directory " + path.toString(), e);
       synchronized (invalidDirectories) {
         invalidDirectories.add(path);

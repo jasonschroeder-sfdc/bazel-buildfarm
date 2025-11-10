@@ -263,6 +263,7 @@ public class InputFetcher implements Runnable {
         execDirEx.toStatus(status);
       } else {
         status.setCode(Code.INTERNAL.getNumber());
+        Span.current().setStatus(StatusCode.ERROR).recordException(e);
         log.log(Level.SEVERE, format("error creating exec dir for %s", executionName), e);
       }
       Span.current()

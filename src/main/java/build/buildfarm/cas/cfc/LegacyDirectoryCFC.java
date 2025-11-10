@@ -45,6 +45,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.Deadline;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import io.prometheus.client.Counter;
 import java.io.IOException;
 import java.nio.channels.ClosedByInterruptException;
@@ -267,6 +269,8 @@ public class LegacyDirectoryCFC extends CASFileCache {
                 }
               }
             } catch (Exception e) {
+              Span.current().setStatus(StatusCode.ERROR).recordException(e);
+
               log.log(Level.SEVERE, "error processing directory " + path.toString(), e);
             }
           });
@@ -402,6 +406,7 @@ public class LegacyDirectoryCFC extends CASFileCache {
     try {
       containingDirectories = directoriesIndex.removeEntry(entry.key);
     } catch (Exception e) {
+      Span.current().setStatus(StatusCode.ERROR).recordException(e);
       log.log(Level.SEVERE, "error removing entry " + entry.key + " from directoriesIndex", e);
       containingDirectories = ImmutableList.of();
     }

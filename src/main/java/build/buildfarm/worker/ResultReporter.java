@@ -188,6 +188,8 @@ class ResultReporter implements Runnable {
       // cancellation here should not be logged
       return 0;
     } catch (IOException e) {
+      Span.current().setStatus(StatusCode.ERROR).recordException(e);
+
       log.log(Level.SEVERE, String.format("error uploading outputs for %s", operationName), e);
       return 0;
     }

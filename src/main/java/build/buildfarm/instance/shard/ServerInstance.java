@@ -625,6 +625,7 @@ public class ServerInstance extends NodeInstance {
                           public void onFailure(Throwable t) {
                             queueFailureCounter.inc();
                             log.log(Level.SEVERE, "error queueing " + operationName, t);
+                            Span.current().recordException(t).setStatus(StatusCode.ERROR);
                           }
                         },
                         operationTransformService);
@@ -678,6 +679,7 @@ public class ServerInstance extends NodeInstance {
                     operationQueuer = null;
                     return;
                   } catch (Exception t) {
+                    Span.current().recordException(t).setStatus(StatusCode.ERROR);
                     log.log(Level.SEVERE, "OperationQueuer: fatal exception during iteration", t);
                   } finally {
                     log.log(Level.FINER, "OperationQueuer: Exiting");
@@ -1556,6 +1558,7 @@ public class ServerInstance extends NodeInstance {
                         reason, directoryBlobDigest, RequestMetadata.getDefaultInstance()),
                     Exception.class,
                     e -> {
+                      Span.current().recordException(e).setStatus(StatusCode.ERROR);
                       log.log(
                           Level.SEVERE,
                           format(

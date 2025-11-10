@@ -16,6 +16,8 @@ package build.buildfarm.common.redis;
 
 import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.GoogleCredentials;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import java.io.Closeable;
 import java.io.IOException;
 import java.time.Duration;
@@ -118,6 +120,8 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
     } catch (Exception e) {
       // suppress all errors as we cannot allow the task to die
       // log for visibility
+      Span.current().setStatus(StatusCode.ERROR).recordException(e);
+
       log.log(Level.SEVERE, "Background IAM token refresh failed", e);
     }
   }
@@ -156,10 +160,13 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
     } catch (IOException ioe) {
       // Save last exception for inline feedback
       this.lastException = ioe;
+      Span.current().setStatus(StatusCode.ERROR).recordException(ioe);
       log.log(Level.SEVERE, "Background IAM token refresh failed", ioe);
       throw new RuntimeException(ioe);
     } catch (Exception e) {
       // Save last exception for inline feedback
+      Span.current().setStatus(StatusCode.ERROR).recordException(e);
+
       log.log(Level.SEVERE, "Background IAM token refresh failed", e);
       this.lastException = e;
       // Bubble up for direct feedback
