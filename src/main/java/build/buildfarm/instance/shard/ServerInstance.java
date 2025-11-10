@@ -541,7 +541,8 @@ public class ServerInstance extends NodeInstance {
                   backplane::isStopped,
                   dispatchedOperations,
                   this::requeueOperation,
-                  dispatchedMonitorIntervalSeconds));
+                  dispatchedMonitorIntervalSeconds),
+              "DispatchedMonitor");
     } else {
       dispatchedMonitor = null;
     }
@@ -691,7 +692,8 @@ public class ServerInstance extends NodeInstance {
                     log.log(Level.SEVERE, "interrupted while stopping instance " + getName(), e);
                   }
                 }
-              });
+              },
+              "OperationQueuer");
     } else {
       operationQueuer = null;
       transformPollerExecutor = null;
