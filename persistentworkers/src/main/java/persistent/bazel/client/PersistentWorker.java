@@ -88,11 +88,9 @@ public class PersistentWorker implements Worker<WorkRequest, WorkResponse> {
 
       logIfBadResponse(response);
     } catch (IOException e) {
-      e.printStackTrace();
-      logger.severe("IO Failing with : " + e.getMessage());
+      logger.log(Level.SEVERE, "IO Failing with : " + e.getMessage(), e);
     } catch (Exception e) {
-      e.printStackTrace();
-      logger.severe("Failing with : " + e.getMessage());
+      logger.log(Level.SEVERE, "Failing with : " + e.getMessage(), e);
     }
     return response;
   }
@@ -106,7 +104,7 @@ public class PersistentWorker implements Worker<WorkRequest, WorkResponse> {
     try {
       return this.workerRW.getProcessWrapper().getErrorString();
     } catch (IOException e) {
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "Can't get stderr", e);
       return "getStdErr Exception: " + e;
     }
   }
@@ -115,7 +113,7 @@ public class PersistentWorker implements Worker<WorkRequest, WorkResponse> {
     try {
       return this.workerRW.getProcessWrapper().flushErrorString();
     } catch (IOException e) {
-      e.printStackTrace();
+      logger.log(Level.SEVERE, "flushStdErr", e);
       return "flushStdErr Exception: " + e;
     }
   }
