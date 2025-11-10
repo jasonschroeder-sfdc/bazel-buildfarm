@@ -21,6 +21,8 @@ import com.google.common.io.BaseEncoding;
 import com.google.common.util.concurrent.FutureCallback;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import java.util.logging.Level;
 import lombok.extern.java.Log;
 
@@ -137,6 +139,8 @@ public class FetchService extends FetchImplBase {
           @Override
           public void onFailure(Throwable t) {
             // handle NoSuchFileException
+            Span.current().setStatus(StatusCode.ERROR).recordException(t);
+
             log.log(Level.SEVERE, "fetch blob failed", t);
             responseObserver.onError(t);
           }
