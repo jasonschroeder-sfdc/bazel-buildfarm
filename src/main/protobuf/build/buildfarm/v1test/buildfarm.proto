@@ -229,7 +229,7 @@ message PollOperationRequest {
   build.bazel.remote.execution.v2.ExecutionStage.Value stage = 3;
 }
 
-// Publish GRPC metrics to promethesus for each server endpoint. This is used
+// Publish GRPC metrics to prometheus for each server endpoint. This is used
 // for SLAs at API boundaries. You may want something similar at the proxy level
 // to see frontend/backend performance.
 message GrpcPrometheusMetrics {
