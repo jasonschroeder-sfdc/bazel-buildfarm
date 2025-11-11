@@ -131,6 +131,26 @@ pkg_tar(
 )
 
 pkg_tar(
+    name = "layer_buildfarm_tools",
+    srcs = [
+        "//src/main/java/build/buildfarm/tools:GracefulShutdown_deploy.jar",
+        "//src/main/java/build/buildfarm/tools:bf-ac_deploy.jar",
+        "//src/main/java/build/buildfarm/tools:bf-cancel_deploy.jar",
+        "//src/main/java/build/buildfarm/tools:bf-cat_deploy.jar",
+        "//src/main/java/build/buildfarm/tools:bf-executor_deploy.jar",
+        "//src/main/java/build/buildfarm/tools:bf-extractor_deploy.jar",
+        "//src/main/java/build/buildfarm/tools:bf-hist_deploy.jar",
+        "//src/main/java/build/buildfarm/tools:bf-index-worker_deploy.jar",
+        "//src/main/java/build/buildfarm/tools:bf-mount_deploy.jar",
+        "//src/main/java/build/buildfarm/tools:bf-upload_deploy.jar",
+        "//src/main/java/build/buildfarm/tools:bf-workerprofile_deploy.jar",
+        "//src/main/java/build/buildfarm/tools:buildfarm-http-proxy_deploy.jar",
+    ],
+    package_dir = DEFAULT_PACKAGE_DIR,
+    tags = ["container"],
+)
+
+pkg_tar(
     name = "layer_minimal_config",
     srcs = ["@build_buildfarm//examples:example_configs"],
     package_dir = DEFAULT_PACKAGE_DIR,
