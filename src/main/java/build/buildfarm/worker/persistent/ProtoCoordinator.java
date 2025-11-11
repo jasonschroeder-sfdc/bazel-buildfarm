@@ -280,7 +280,11 @@ public class ProtoCoordinator extends WorkCoordinator<RequestCtx, ResponseCtx, C
 
   private void onTimeout(RequestCtx request, PersistentWorker worker) {
     if (worker != null) {
-      log.severe("Persistent Worker timed out on request: " + request.request);
+      log.severe(
+          "Persistent Worker timed out on request: "
+              + request.request
+              + " after "
+              + request.timeout);
       try {
         this.workerPool.invalidateObject(worker.getKey(), worker);
       } catch (Exception e) {
