@@ -24,8 +24,8 @@ import java.nio.file.Path;
 import java.util.Optional;
 import java.util.Set;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 import lombok.Getter;
+import lombok.extern.java.Log;
 import persistent.bazel.processes.ProtoWorkerRW;
 import persistent.common.Worker;
 import persistent.common.processes.ProcessWrapper;
@@ -39,11 +39,10 @@ import persistent.common.processes.ProcessWrapper;
  *
  * <p>Also takes care of the underlying process's environment, i.e. directories and files.
  */
+@Log
 public class PersistentWorker implements Worker<WorkRequest, WorkResponse> {
   /** Services supporting being run as persistent workers need to parse this flag */
   public static final String PERSISTENT_WORKER_FLAG = "--persistent_worker";
-
-  private static final Logger logger = Logger.getLogger(PersistentWorker.class.getName());
 
   @Getter private final WorkerKey key;
   @Getter private final ImmutableList<String> initCmd;
@@ -59,7 +58,7 @@ public class PersistentWorker implements Worker<WorkRequest, WorkResponse> {
     Files.createDirectories(execRoot);
 
     final var logLevel = Level.FINE;
-    if (logger.isLoggable(logLevel)) {
+    if (log.isLoggable(logLevel)) {
       Set<Path> workerFiles = ImmutableSet.copyOf(key.getWorkerFilesWithHashes().keySet());
       StringBuilder msg = new StringBuilder();
       msg.append("Starting Worker[");
@@ -70,7 +69,7 @@ public class PersistentWorker implements Worker<WorkRequest, WorkResponse> {
       msg.append(initCmd);
       msg.append(") with files: \n");
       msg.append(workerFiles);
-      logger.log(logLevel, msg.toString());
+      log.log(logLevel, msg.toString());
     }
 
     ProcessWrapper processWrapper = new ProcessWrapper(execRoot, initCmd, key.getEnv());
@@ -88,9 +87,9 @@ public class PersistentWorker implements Worker<WorkRequest, WorkResponse> {
 
       logIfBadResponse(response);
     } catch (IOException e) {
-      logger.log(Level.SEVERE, "IO Failing with : " + e.getMessage(), e);
+      log.log(Level.SEVERE, "IO Failing with : " + e.getMessage(), e);
     } catch (Exception e) {
-      logger.log(Level.SEVERE, "Failing with : " + e.getMessage(), e);
+      log.log(Level.SEVERE, "Failing with : " + e.getMessage(), e);
     }
     return response;
   }
@@ -104,7 +103,7 @@ public class PersistentWorker implements Worker<WorkRequest, WorkResponse> {
     try {
       return this.workerRW.getProcessWrapper().getErrorString();
     } catch (IOException e) {
-      logger.log(Level.SEVERE, "Can't get stderr", e);
+      log.log(Level.SEVERE, "Can't get stderr", e);
       return "getStdErr Exception: " + e;
     }
   }
@@ -113,20 +112,20 @@ public class PersistentWorker implements Worker<WorkRequest, WorkResponse> {
     try {
       return this.workerRW.getProcessWrapper().flushErrorString();
     } catch (IOException e) {
-      logger.log(Level.SEVERE, "flushStdErr", e);
+      log.log(Level.SEVERE, "flushStdErr", e);
       return "flushStdErr Exception: " + e;
     }
   }
 
   private void logRequest(WorkRequest request) {
-    logger.log(
+    log.log(
         Level.FINE,
         "doWork()------<" + "Got request with args: " + request.getArgumentsList() + "------>");
   }
 
   private void logIfBadResponse(WorkResponse response) throws IOException {
     int returnCode = response.getExitCode();
-    if (returnCode != 0 && logger.isLoggable(Level.FINE)) {
+    if (returnCode != 0 && log.isLoggable(Level.FINE)) {
       StringBuilder sb = new StringBuilder();
       sb.append("logBadResponse(err)");
       sb.append("\nResponse non-zero exit_code: ");
@@ -136,7 +135,7 @@ public class PersistentWorker implements Worker<WorkRequest, WorkResponse> {
       sb.append("\n\tProcess stderr: ");
       String stderr = workerRW.getProcessWrapper().getErrorString();
       sb.append(stderr);
-      logger.log(Level.FINE, sb.toString());
+      log.log(Level.FINE, sb.toString());
     }
   }
 
