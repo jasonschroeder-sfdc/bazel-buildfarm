@@ -43,6 +43,9 @@ import io.grpc.Context;
 import io.grpc.Context.CancellableContext;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import io.prometheus.client.Histogram;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -202,6 +205,7 @@ public class WriteStreamObserver implements StreamObserver<WriteRequest> {
   }
 
   @GuardedBy("this")
+  @WithSpan
   private void initialize(WriteRequest request) throws InvalidResourceNameException {
     String resourceName = request.getResourceName();
     if (resourceName.isEmpty()) {
@@ -234,6 +238,7 @@ public class WriteStreamObserver implements StreamObserver<WriteRequest> {
               public void onFailure(Throwable t) {
                 if (errorResponse(t)) {
                   logWriteActivity("completing", t);
+                  Span.current().setStatus(StatusCode.ERROR).recordException(t);
                 }
               }
             },

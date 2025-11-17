@@ -98,7 +98,6 @@ import io.grpc.Status.Code;
 import io.grpc.health.v1.HealthCheckResponse.ServingStatus;
 import io.grpc.protobuf.services.HealthStatusManager;
 import io.grpc.protobuf.services.ProtoReflectionServiceV1;
-import io.opentelemetry.instrumentation.annotations.WithSpan;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import java.io.File;
@@ -601,7 +600,6 @@ public final class Worker extends LoggingMain {
                 return isPaused;
               }
 
-              @WithSpan
               void registerIfExpired() {
                 long now = System.currentTimeMillis();
                 if (now >= workerRegistrationExpiresAt
