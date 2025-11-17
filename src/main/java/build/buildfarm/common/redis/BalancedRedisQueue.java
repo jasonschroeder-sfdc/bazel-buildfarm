@@ -190,6 +190,7 @@ public class BalancedRedisQueue {
    * @return Whether or not the value was removed.
    * @note Suggested return identifier: wasRemoved.
    */
+  @WithSpan
   public boolean removeFromDequeue(UnifiedJedis unified, BalancedQueueEntry balancedQueueEntry) {
     String queue = balancedQueueEntry.queue();
     try (Jedis jedis = getJedisFromKey(unified, queue)) {
@@ -200,6 +201,7 @@ public class BalancedRedisQueue {
     return false;
   }
 
+  @WithSpan
   public void removeFromDequeue(AbstractPipeline pipeline, BalancedQueueEntry balancedQueueEntry) {
     queueDecorator
         .decorate(null, balancedQueueEntry.queue())

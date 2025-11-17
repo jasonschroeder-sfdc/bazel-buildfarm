@@ -254,6 +254,7 @@ class ShardWorkerContext implements WorkerContext {
   }
 
   @Override
+  @WithSpan
   public void resumePoller(
       Poller poller,
       String name,
@@ -561,6 +562,7 @@ class ShardWorkerContext implements WorkerContext {
     writer.write(digest, file);
   }
 
+  @WithSpan
   private void updateActionResultStdOutputs(
       ActionResult.Builder resultBuilder, DigestUtil digestUtil)
       throws IOException, InterruptedException {
@@ -720,6 +722,7 @@ class ShardWorkerContext implements WorkerContext {
   }
 
   @Override
+  @WithSpan
   public void uploadOutputs(
       Digest actionDigest, ActionResult.Builder resultBuilder, Path actionRoot, Command command)
       throws IOException, InterruptedException, StatusException {
@@ -782,6 +785,7 @@ class ShardWorkerContext implements WorkerContext {
   }
 
   @Override
+  @WithSpan
   public Path createExecDir(
       String operationName,
       Map<build.bazel.remote.execution.v2.Digest, Directory> directoriesIndex,
@@ -804,11 +808,13 @@ class ShardWorkerContext implements WorkerContext {
   // might want to split for removeDirectory and decrement references to avoid removing for streamed
   // output
   @Override
+  @WithSpan
   public void destroyExecDir(Path execDir) throws IOException, InterruptedException {
     execFileSystem.destroyExecDir(execDir);
   }
 
   @Override
+  @WithSpan
   public void blacklistAction(String actionId) throws IOException, InterruptedException {
     createBackplaneRetrier()
         .execute(
