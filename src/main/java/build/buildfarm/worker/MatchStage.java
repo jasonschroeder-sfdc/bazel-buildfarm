@@ -20,6 +20,9 @@ import static java.util.concurrent.Executors.newSingleThreadExecutor;
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 
+import build.buildfarm.common.ThreadFactoryUtils;
+import java.util.concurrent.Executors;
+
 import build.bazel.remote.execution.v2.ExecuteOperationMetadata;
 import build.bazel.remote.execution.v2.ExecuteResponse;
 import build.bazel.remote.execution.v2.ExecutedActionMetadata;
@@ -45,7 +48,9 @@ import lombok.extern.java.Log;
 
 @Log
 public class MatchStage extends PipelineStage {
-  private ExecutorService pollerExecutor = newSingleThreadExecutor();
+  private ExecutorService pollerExecutor =
+      Executors.newSingleThreadExecutor(
+          ThreadFactoryUtils.createNamedSingleThreadFactory("MatchStage-PollerExecutor"));
 
   public MatchStage(WorkerContext workerContext, PipelineStage output, PipelineStage error) {
     super("MatchStage", workerContext, output, error);

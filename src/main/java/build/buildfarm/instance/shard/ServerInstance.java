@@ -47,7 +47,9 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static net.javacrumbs.futureconverter.java8guava.FutureConverter.toCompletableFuture;
 import static net.javacrumbs.futureconverter.java8guava.FutureConverter.toListenableFuture;
 
+import build.buildfarm.common.ThreadFactoryUtils;
 import build.bazel.remote.execution.v2.Action;
+import java.util.concurrent.Executors;
 import build.bazel.remote.execution.v2.ActionResult;
 import build.bazel.remote.execution.v2.BatchReadBlobsResponse.Response;
 import build.bazel.remote.execution.v2.CacheCapabilities;
@@ -274,8 +276,11 @@ public class ServerInstance extends NodeInstance {
       BuildfarmExecutors.getTransformServicePool();
   private final ListeningExecutorService actionCacheFetchService;
   private final ScheduledExecutorService contextDeadlineScheduler =
-      newSingleThreadScheduledExecutor();
-  private final ExecutorService operationDeletionService = newSingleThreadExecutor();
+      Executors.newSingleThreadScheduledExecutor(
+          ThreadFactoryUtils.createNamedSingleThreadFactory("ContextDeadlineScheduler"));
+  private final ExecutorService operationDeletionService =
+      Executors.newSingleThreadExecutor(
+          ThreadFactoryUtils.createNamedSingleThreadFactory("OperationDeletionService"));
   private final BlockingQueue<Object> transformTokensQueue =
       new LinkedBlockingQueue<>(TRANSFORM_TOKENS);
   private final ExecutorService transformPollerExecutor;
@@ -531,13 +536,17 @@ public class ServerInstance extends NodeInstance {
                   backplane::isStopped,
                   dispatchedOperations,
                   this::requeueOperation,
-                  dispatchedMonitorIntervalSeconds));
+                  dispatchedMonitorIntervalSeconds),
+              "DispatchedMonitor");
     } else {
       dispatchedMonitor = null;
     }
 
     if (runOperationQueuer) {
-      transformPollerExecutor = newFixedThreadPool(TRANSFORM_TOKENS);
+      transformPollerExecutor =
+          Executors.newFixedThreadPool(
+              TRANSFORM_TOKENS,
+              ThreadFactoryUtils.createNamedThreadFactory("TransformPollerExecutor-%d"));
 
       operationQueuer =
           new Thread(
@@ -678,7 +687,8 @@ public class ServerInstance extends NodeInstance {
                     log.log(Level.SEVERE, "interrupted while stopping instance " + getName(), e);
                   }
                 }
-              });
+              },
+              "OperationQueuer");
     } else {
       operationQueuer = null;
       transformPollerExecutor = null;
@@ -705,7 +715,7 @@ public class ServerInstance extends NodeInstance {
                 }
               }
             },
-            "Prometheus Metrics Collector");
+            "PrometheusMetricsCollector");
   }
 
   private void updateQueueSizes(List<QueueStatus> queues) {

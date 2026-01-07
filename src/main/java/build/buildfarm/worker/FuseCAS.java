@@ -419,7 +419,7 @@ public class FuseCAS extends FuseStubFS {
                 umount();
                 mounted = false;
               });
-      new Thread(unmounter).start();
+      new Thread(unmounter, "FuseCAS-Unmounter").start();
     }
   }
 

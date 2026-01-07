@@ -42,7 +42,7 @@ public class Pipeline implements Iterable<PipelineStage> {
   }
 
   public void add(PipelineStage stage, int closePriority) {
-    stageThreads.put(stage, new Thread(stage));
+    stageThreads.put(stage, new Thread(stage, stage.getName() + "-Thread"));
     if (closePriority < 0) {
       throw new IllegalArgumentException("closePriority cannot be negative");
     }

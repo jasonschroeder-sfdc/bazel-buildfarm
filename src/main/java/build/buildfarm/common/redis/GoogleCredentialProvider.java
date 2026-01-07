@@ -14,6 +14,7 @@
 
 package build.buildfarm.common.redis;
 
+import build.buildfarm.common.ThreadFactoryUtils;
 import com.google.auth.oauth2.AccessToken;
 import com.google.auth.oauth2.GoogleCredentials;
 import java.io.Closeable;
@@ -60,7 +61,9 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
     this.googleCredentials =
         GoogleCredentials.getApplicationDefault()
             .createScoped("https://www.googleapis.com/auth/cloud-platform");
-    this.service = Executors.newSingleThreadScheduledExecutor();
+    this.service =
+        Executors.newSingleThreadScheduledExecutor(
+            ThreadFactoryUtils.createNamedSingleThreadFactory("GoogleCredentialProvider-Refresh"));
 
     this.refreshDuration = refreshDuration;
     this.lifetime = lifetime;

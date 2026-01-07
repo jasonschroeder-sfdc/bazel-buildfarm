@@ -22,7 +22,9 @@ import static java.util.logging.Level.SEVERE;
 import static java.util.logging.Level.WARNING;
 
 import build.buildfarm.common.LoggingMain;
+import build.buildfarm.common.ThreadFactoryUtils;
 import build.buildfarm.common.config.BuildfarmConfigs;
+import java.util.concurrent.Executors;
 import build.buildfarm.common.config.GrpcMetrics;
 import build.buildfarm.common.grpc.TracingMetadataUtils.ServerHeadersInterceptor;
 import build.buildfarm.common.services.ByteStreamService;
@@ -69,7 +71,9 @@ public class BuildFarmServer extends LoggingMain {
           .help("Service health check.")
           .register();
 
-  private final ScheduledExecutorService keepaliveScheduler = newSingleThreadScheduledExecutor();
+  private final ScheduledExecutorService keepaliveScheduler =
+      Executors.newSingleThreadScheduledExecutor(
+          ThreadFactoryUtils.createNamedSingleThreadFactory("KeepaliveScheduler"));
   private Instance instance;
   private HealthStatusManager healthStatusManager;
   private io.grpc.Server server;
@@ -131,7 +135,7 @@ public class BuildFarmServer extends LoggingMain {
     healthStatusManager = new HealthStatusManager();
 
     invocationsCollector = new InvocationsCollector(serverInstance);
-    invocationsCollectorThread = new Thread(invocationsCollector);
+    invocationsCollectorThread = new Thread(invocationsCollector, "InvocationsCollector");
     invocationsCollectorThread.start();
 
     ServerInterceptor headersInterceptor = new ServerHeadersInterceptor(invocationsCollector::add);
