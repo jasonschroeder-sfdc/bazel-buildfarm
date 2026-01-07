@@ -11,14 +11,14 @@ bazel_dep(name = "aspect_bazel_lib", version = "2.21.2")
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
 bazel_dep(name = "blake3", version = "1.8.2")
 bazel_dep(name = "buildifier_prebuilt", version = "8.2.0.2")
-bazel_dep(name = "gazelle", version = "0.45.0")
+bazel_dep(name = "gazelle", version = "0.46.0")
 bazel_dep(name = "grpc-java", version = "1.75.0")
 bazel_dep(name = "googleapis", version = "0.0.0-20240819-fe8ba054a")
 bazel_dep(name = "grpc-proto", version = "0.0.0-20240627-ec30f58", repo_name = "io_grpc_grpc_proto")
 bazel_dep(name = "hermetic_cc_toolchain", version = "3.2.0")
 bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "protobuf", version = "29.5", repo_name = "com_google_protobuf")
-bazel_dep(name = "rules_cc", version = "0.2.10")
+bazel_dep(name = "rules_cc", version = "0.2.13")
 bazel_dep(name = "rules_java", version = "8.15.2")
 bazel_dep(name = "rules_jvm_external", version = "6.8")
 bazel_dep(name = "rules_license", version = "1.0.0")
@@ -58,11 +58,14 @@ maven.install(
     name = "buildfarm_maven",
     artifacts = [
         # keep sorted
+        "ch.qos.logback.contrib:logback-jackson:0.1.5",
+        "ch.qos.logback.contrib:logback-json-classic:0.1.5",
+        "ch.qos.logback:logback-classic:1.5.6",
         "com.amazonaws:aws-java-sdk-core",  # Version is specified via the BOM below
         "com.amazonaws:aws-java-sdk-s3",
         "com.amazonaws:aws-java-sdk-secretsmanager",
         "com.fasterxml.jackson.core:jackson-databind:2.20.0",
-        "com.github.ben-manes.caffeine:caffeine:3.2.2",
+        "com.github.ben-manes.caffeine:caffeine:3.2.3",
         "com.github.docker-java:docker-java",
         "com.github.docker-java:docker-java-api",
         "com.github.docker-java:docker-java-core",
@@ -114,6 +117,9 @@ maven.install(
         "io.netty:netty-transport-native-epoll",
         "io.netty:netty-transport-native-kqueue",
         "io.netty:netty-transport-native-unix-common",
+        "io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations:2.20.1",
+        "io.opentelemetry:opentelemetry-api",  # Version is specified via the BOM below
+        "io.opentelemetry:opentelemetry-context",  # Version is specified via the BOM below
         "io.prometheus:simpleclient:0.16.0",
         "io.prometheus:simpleclient_hotspot:0.16.0",
         "io.prometheus:simpleclient_httpserver:0.16.0",
@@ -134,6 +140,7 @@ maven.install(
         "org.openjdk.jmh:jmh-generator-annprocess:1.37",
         "org.projectlombok:lombok:1.18.40",
         "org.redisson:redisson:3.51.0",
+        "org.slf4j:jul-to-slf4j:2.0.13",
         "org.slf4j:slf4j-simple:2.0.17",
         "org.threeten:threetenbp:1.7.2",
         "org.xerial:sqlite-jdbc:3.50.3.0",
@@ -147,6 +154,7 @@ maven.install(
         "com.google.auth:google-auth-library-bom:1.23.0",
         "io.grpc:grpc-bom:1.75.0",
         "io.netty:netty-bom:4.1.108.Final",
+        "io.opentelemetry:opentelemetry-bom:1.54.1",
     ],
     fail_if_repin_required = True,  # TO RE-PIN: REPIN=1 bazel run @buildfarm_maven//:pin
     generate_compat_repositories = True,

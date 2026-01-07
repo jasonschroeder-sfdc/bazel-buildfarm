@@ -93,6 +93,8 @@ import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.netty.handler.codec.http.QueryStringDecoder;
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import io.prometheus.client.Counter;
 import io.prometheus.client.Gauge;
 import io.prometheus.client.Histogram;
@@ -1292,6 +1294,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
 
   private record FileEntryKey(String key, long size, boolean isExecutable, Digest digest) {}
 
+  @WithSpan
   public void initializeRootDirectory() throws IOException {
     for (Path dir : entryPathStrategy) {
       Files.createDirectories(dir);
@@ -1364,8 +1367,11 @@ public abstract class CASFileCache implements ContentAddressableStorage {
    * exist under the root into the storage map. This call will create the root if it does not exist,
    * and will scale in cost with the number of files already present.
    */
+  @WithSpan
   private void startRoutine(
-      Consumer<Digest> onStartPut, ExecutorService removeDirectoryService, boolean skipLoad)
+      Consumer<Digest> onStartPut,
+      ExecutorService removeDirectoryService,
+      @SpanAttribute boolean skipLoad)
       throws IOException, InterruptedException {
     log.log(Level.INFO, "Initializing cache at: " + root);
     Instant startTime = Instant.now();
@@ -1407,6 +1413,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
     prometheusMetricsThread.start();
   }
 
+  @WithSpan
   protected CacheLoadResults loadCache(
       Consumer<Digest> onStartPut, ExecutorService removeDirectoryService)
       throws IOException, InterruptedException {
@@ -1458,6 +1465,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
     return !name.matches("[0-9a-f]{2}");
   }
 
+  @WithSpan
   private CacheScanResults scanRoot(Consumer<Digest> onStartPut)
       throws IOException, InterruptedException {
     // create thread pool
@@ -1522,9 +1530,10 @@ public abstract class CASFileCache implements ContentAddressableStorage {
   }
 
   @SuppressWarnings("SynchronizationOnLocalVariableOrMethodParameter")
+  @WithSpan
   private void processRootFile(
       Consumer<Digest> onStartPut,
-      Path path,
+      @SpanAttribute Path path,
       SizeEntry entry,
       ImmutableList.Builder<Path> computeDirs,
       ImmutableList.Builder<Path> deleteFiles)
@@ -1671,6 +1680,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
 
   @GuardedBy("this")
   @SuppressWarnings("PMD.CompareObjectsWithEquals")
+  @WithSpan
   private Entry waitForLastUnreferencedEntry(long blobSizeInBytes) throws InterruptedException {
     while (header.after == header) { // Intentional reference comparison
       int references = 0;
@@ -1809,6 +1819,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
         || e instanceof ClosedByInterruptException;
   }
 
+  @WithSpan
   protected Entry safeStorageInsertion(String key, Entry entry) {
     Lock lock;
     try {
@@ -1826,6 +1837,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
     }
   }
 
+  @WithSpan
   private Entry safeStorageRemoval(String key) throws IOException {
     Path path = getPath(key);
     Path expiredPath = getRemovingPath(key);
@@ -1871,6 +1883,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
 
   @SuppressWarnings({"NonAtomicOperationOnVolatileField", "PMD.CompareObjectsWithEquals"})
   @GuardedBy("this")
+  @WithSpan
   private ListenableFuture<Entry> expireEntry(long blobSizeInBytes, ExecutorService service)
       throws IOException, InterruptedException {
     for (Entry e = waitForLastUnreferencedEntry(blobSizeInBytes);
@@ -1994,6 +2007,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
     }
   }
 
+  @WithSpan
   protected void fetchDirectory(
       Path rootPath,
       Digest digest,
@@ -2071,6 +2085,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
       ExecutorService service);
 
   @VisibleForTesting
+  @WithSpan
   public PathResult put(Digest digest, boolean isExecutable)
       throws IOException, InterruptedException {
     checkState(digest.getSize() > 0, "file entries may not be empty");
@@ -2080,6 +2095,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
 
   // This can result in deadlock if called with a direct executor. I'm unsure how to guard
   // against it, until we can get to using a current-download future
+  @WithSpan
   public ListenableFuture<PathResult> put(Digest digest, boolean isExecutable, Executor executor) {
     checkState(digest.getSize() > 0, "file entries may not be empty");
 
@@ -2090,6 +2106,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
   }
 
   @SuppressWarnings("ThrowFromFinallyBlock")
+  @WithSpan
   PathResult putAndCopy(Digest digest, boolean isExecutable)
       throws IOException, InterruptedException {
     String key = getKey(digest, isExecutable);
@@ -2139,6 +2156,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
     return new PathResult(getPath(key), downloadComplete);
   }
 
+  @WithSpan
   private void copyExternalInputProgressive(Digest digest, CancellableOutputStream out)
       throws IOException, InterruptedException {
     try (InputStream in = newExternalInput(Compressor.Value.IDENTITY, digest, out.getWritten())) {
@@ -2157,6 +2175,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
     return e;
   }
 
+  @WithSpan
   private void copyExternalInput(Digest digest, CancellableOutputStream out)
       throws IOException, InterruptedException {
     Retrier retrier = new Retrier(Backoff.sequential(5), Retrier.DEFAULT_IS_RETRIABLE);
@@ -2214,6 +2233,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
         void cancel() {}
       };
 
+  @WithSpan
   private CancellableOutputStream putImpl(
       String key,
       DigestFunction.Value digestFunction,
@@ -2360,6 +2380,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
     }
   }
 
+  @WithSpan
   protected void deleteExpiredKey(String key) throws IOException {
     Path path = getRemovingPath(key);
     long createdTimeMs = Files.getLastModifiedTime(path).to(MILLISECONDS);
@@ -2377,6 +2398,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
   }
 
   @SuppressWarnings({"ConstantConditions", "ResultOfMethodCallIgnored"})
+  @WithSpan
   protected boolean charge(String key, long blobSizeInBytes, AtomicBoolean requiresDischarge)
       throws IOException, InterruptedException {
     boolean interrupted = false;
@@ -2449,6 +2471,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
     return true;
   }
 
+  @WithSpan
   private CancellableOutputStream putOrReferenceGuarded(
       String key,
       DigestFunction.Value digestFunction,
@@ -2813,6 +2836,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
     }
   }
 
+  @WithSpan
   private void performCopy(Write write, String key) throws IOException {
     try (OutputStream out = write.getOutput(1, MINUTES, () -> {});
         InputStream in = Files.newInputStream(getPath(key))) {

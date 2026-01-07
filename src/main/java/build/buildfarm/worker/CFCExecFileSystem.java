@@ -46,6 +46,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ListenableFuture;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.FileStore;
@@ -104,6 +105,7 @@ public class CFCExecFileSystem implements ExecFileSystem {
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public ListenableFuture<Void> start(
       Consumer<List<Digest>> onDigests, boolean skipLoad, boolean writable)
       throws IOException, InterruptedException {

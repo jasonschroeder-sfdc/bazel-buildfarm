@@ -47,6 +47,7 @@ import build.bazel.remote.execution.v2.ContentAddressableStorageGrpc.ContentAddr
 import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.DigestFunction;
 import build.bazel.remote.execution.v2.Directory;
+import build.bazel.remote.execution.v2.ExecuteRequest;
 import build.bazel.remote.execution.v2.ExecutionGrpc;
 import build.bazel.remote.execution.v2.ExecutionGrpc.ExecutionStub;
 import build.bazel.remote.execution.v2.ExecutionPolicy;
@@ -90,6 +91,7 @@ import build.buildfarm.v1test.GetClientStartTimeRequest;
 import build.buildfarm.v1test.GetClientStartTimeResult;
 import build.buildfarm.v1test.OperationQueueGrpc;
 import build.buildfarm.v1test.OperationQueueGrpc.OperationQueueBlockingStub;
+import build.buildfarm.v1test.PipelineChange;
 import build.buildfarm.v1test.PollOperationRequest;
 import build.buildfarm.v1test.PrepareWorkerForGracefulShutDownRequest;
 import build.buildfarm.v1test.PrepareWorkerForGracefulShutDownRequestResults;
@@ -99,6 +101,8 @@ import build.buildfarm.v1test.ShutDownWorkerGracefullyRequest;
 import build.buildfarm.v1test.Tree;
 import build.buildfarm.v1test.WorkerControlGrpc;
 import build.buildfarm.v1test.WorkerControlGrpc.WorkerControlBlockingStub;
+import build.buildfarm.v1test.WorkerPipelineChangeRequest;
+import build.buildfarm.v1test.WorkerPipelineChangeResponse;
 import build.buildfarm.v1test.WorkerProfileGrpc;
 import build.buildfarm.v1test.WorkerProfileGrpc.WorkerProfileFutureStub;
 import build.buildfarm.v1test.WorkerProfileMessage;
@@ -815,6 +819,7 @@ public class StubInstance extends InstanceBase {
     return nextPageToken;
   }
 
+  // future could be ExecuteResponse
   @Override
   public ListenableFuture<Void> execute(
       // TODO should this be ActionKey
@@ -824,7 +829,34 @@ public class StubInstance extends InstanceBase {
       ResultsCachePolicy resultsCachePolicy,
       RequestMetadata metadata,
       Watcher watcher) {
-    throw new UnsupportedOperationException();
+    SettableFuture<Void> result = SettableFuture.create();
+    newExStub()
+        .execute(
+            ExecuteRequest.newBuilder()
+                .setInstanceName(getName())
+                .setActionDigest(DigestUtil.toDigest(actionDigest))
+                .setDigestFunction(actionDigest.getDigestFunction())
+                .setExecutionPolicy(executionPolicy)
+                .setResultsCachePolicy(resultsCachePolicy)
+                .setSkipCacheLookup(true)
+                .build(),
+            new StreamObserver<Operation>() {
+              @Override
+              public void onNext(Operation operation) {
+                watcher.observe(operation);
+              }
+
+              @Override
+              public void onError(Throwable t) {
+                result.setException(t);
+              }
+
+              @Override
+              public void onCompleted() {
+                result.set(null);
+              }
+            });
+    return result;
   }
 
   @Override
@@ -986,11 +1018,27 @@ public class StubInstance extends InstanceBase {
   }
 
   @Override
-  public PrepareWorkerForGracefulShutDownRequestResults shutDownWorkerGracefully() {
+  public PrepareWorkerForGracefulShutDownRequestResults shutDownWorkerGracefully(String name) {
     throwIfStopped();
     return workerControlBlockingStub
         .get()
         .prepareWorkerForGracefulShutdown(
             PrepareWorkerForGracefulShutDownRequest.newBuilder().build());
+  }
+
+  @Override
+  public ListenableFuture<WorkerPipelineChangeResponse> pipelineChange(
+      String name, List<PipelineChange> changes) {
+    throwIfStopped();
+    SettableFuture<WorkerPipelineChangeResponse> result = SettableFuture.create();
+
+    result.set(
+        deadlined(workerControlBlockingStub)
+            .pipelineChange(
+                WorkerPipelineChangeRequest.newBuilder()
+                    .setWorkerName(name)
+                    .addAllChanges(changes)
+                    .build()));
+    return result;
   }
 }

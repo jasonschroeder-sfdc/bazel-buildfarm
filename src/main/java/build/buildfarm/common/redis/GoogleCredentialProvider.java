@@ -24,6 +24,8 @@ import java.time.Instant;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Level;
 import lombok.extern.java.Log;
 import redis.clients.jedis.DefaultRedisCredentials;
@@ -48,6 +50,7 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
   private final ScheduledExecutorService service;
   private final Duration refreshDuration;
   private final Duration lifetime;
+  private final ReadWriteLock credentialsLock = new ReentrantReadWriteLock();
 
   private volatile RedisCredentials credentials;
   private volatile Instant lastRefreshInstant;
@@ -76,10 +79,18 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
   }
 
   public RedisCredentials get() {
-    if (hasTokenExpired()) {
-      throw new RuntimeException("Background IAM token refresh failed", lastException);
+    credentialsLock.readLock().lock();
+    try {
+      if (hasTokenExpired()) {
+        throw new RuntimeException("Background IAM token refresh failed", lastException);
+      }
+      if (this.credentials == null) {
+        log.log(Level.WARNING, "Credentials are null");
+      }
+      return this.credentials;
+    } finally {
+      credentialsLock.readLock().unlock();
     }
-    return this.credentials;
   }
 
   private boolean hasTokenExpired() {
@@ -103,6 +114,7 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
           && this.refreshDuration != null
           && Instant.now().isBefore(this.lastRefreshInstant.plus(this.refreshDuration))) {
         // nothing to do
+        log.log(Level.INFO, "No need to refresh IAM token");
         return;
       }
       refreshTokenNow();
@@ -114,12 +126,14 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
   }
 
   private void refreshTokenNow() {
+    credentialsLock.writeLock().lock();
     try {
-      log.log(Level.FINE, "Refreshing IAM token");
+      log.log(Level.WARNING, "Refreshing IAM token");
       googleCredentials.refresh();
       AccessToken accessToken = googleCredentials.getAccessToken();
+      log.log(Level.INFO, String.format("token expiry: %s", accessToken.getExpirationTime().toString()));
       if (accessToken != null) {
-        log.log(Level.FINE, "refreshed access token!");
+        log.log(Level.INFO, "refreshed access token!");
         String v = accessToken.getTokenValue();
 
         // got a successful token refresh
@@ -128,7 +142,7 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
         // clear the last saved exception
         this.lastException = null;
         log.log(
-            Level.FINE,
+            Level.INFO,
             "IAM token refreshed with lastRefreshInstant ["
                 + lastRefreshInstant
                 + "], refreshDuration ["
@@ -143,12 +157,16 @@ public class GoogleCredentialProvider implements RedisCredentialsProvider, Runna
     } catch (IOException ioe) {
       // Save last exception for inline feedback
       this.lastException = ioe;
+      log.log(Level.SEVERE, "Background IAM token refresh failed", ioe);
       throw new RuntimeException(ioe);
     } catch (Exception e) {
       // Save last exception for inline feedback
+      log.log(Level.SEVERE, "Background IAM token refresh failed", e);
       this.lastException = e;
       // Bubble up for direct feedback
       throw e;
+    } finally {
+      credentialsLock.writeLock().unlock();
     }
   }
 }
