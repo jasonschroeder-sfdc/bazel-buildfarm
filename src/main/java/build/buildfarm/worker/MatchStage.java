@@ -24,6 +24,7 @@ import build.bazel.remote.execution.v2.ExecuteOperationMetadata;
 import build.bazel.remote.execution.v2.ExecuteResponse;
 import build.bazel.remote.execution.v2.ExecutedActionMetadata;
 import build.bazel.remote.execution.v2.RequestMetadata;
+import build.buildfarm.common.ThreadFactoryUtils;
 import build.buildfarm.common.Claim;
 import build.buildfarm.common.DigestUtil;
 import build.buildfarm.common.Poller;
@@ -45,7 +46,9 @@ import lombok.extern.java.Log;
 
 @Log
 public class MatchStage extends PipelineStage {
-  private ExecutorService pollerExecutor = newSingleThreadExecutor();
+  private ExecutorService pollerExecutor =
+      newSingleThreadExecutor(
+          ThreadFactoryUtils.createNamedSingleThreadFactory("MatchStage-PollerExecutor"));
 
   public MatchStage(WorkerContext workerContext, PipelineStage output, PipelineStage error) {
     super("MatchStage", workerContext, output, error);

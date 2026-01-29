@@ -18,6 +18,7 @@ import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
 import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
 import static java.util.concurrent.Executors.newSingleThreadScheduledExecutor;
 
+import build.buildfarm.common.ThreadFactoryUtils;
 import build.buildfarm.common.grpc.Channels;
 import build.buildfarm.common.grpc.Retrier;
 import build.buildfarm.common.grpc.Retrier.Backoff;
@@ -107,7 +108,9 @@ public final class WorkerStubs {
   }
 
   private static ListeningScheduledExecutorService newStubRetryService() {
-    return listeningDecorator(newSingleThreadScheduledExecutor());
+    return listeningDecorator(
+        newSingleThreadScheduledExecutor(
+            ThreadFactoryUtils.createNamedSingleThreadFactory("WorkerStubs-RetryService")));
   }
 
   private static void stopInstance(Instance instance) {

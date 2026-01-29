@@ -56,7 +56,8 @@ class BlobWriteObserver implements WriteObserver {
                 }
                 buffer.shutdown();
               }
-            });
+            },
+            "BlobWriteObserver-PutThread");
     putThread.start();
   }
 

@@ -506,7 +506,7 @@ public class RedisShardBackplane implements Backplane {
             client);
 
     // use Executors...
-    subscriptionThread = new Thread(operationSubscription, "Operation Subscription");
+    subscriptionThread = new Thread(operationSubscription, "OperationSubscription");
 
     subscriptionThread.start();
   }
@@ -528,7 +528,7 @@ public class RedisShardBackplane implements Backplane {
                 }
               }
             },
-            "Failsafe Operation");
+            "FailsafeOperation");
 
     failsafeOperationThread.start();
   }

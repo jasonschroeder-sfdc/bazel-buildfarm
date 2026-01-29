@@ -1409,7 +1409,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
                 }
               }
             },
-            "Prometheus CAS Metrics Collector");
+            "PrometheusCASMetricsCollector");
     prometheusMetricsThread.start();
   }
 

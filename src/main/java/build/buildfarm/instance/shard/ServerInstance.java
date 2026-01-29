@@ -81,6 +81,7 @@ import build.buildfarm.common.ExecutionProperties;
 import build.buildfarm.common.IterableScannable;
 import build.buildfarm.common.Poller;
 import build.buildfarm.common.Scannable;
+import build.buildfarm.common.ThreadFactoryUtils;
 import build.buildfarm.common.TokenizableIterator;
 import build.buildfarm.common.TreeIterator;
 import build.buildfarm.common.TreeIterator.DirectoryEntry;
@@ -278,8 +279,9 @@ public class ServerInstance extends NodeInstance {
       BuildfarmExecutors.getTransformServicePool();
   private final ListeningExecutorService actionCacheFetchService;
   private final ScheduledExecutorService contextDeadlineScheduler =
-      newSingleThreadScheduledExecutor();
-  private final ExecutorService operationDeletionService = newSingleThreadExecutor();
+      newSingleThreadScheduledExecutor(ThreadFactoryUtils.createNamedSingleThreadFactory("ContextDeadlineScheduler"));
+  private final ExecutorService operationDeletionService = 
+      newSingleThreadExecutor(ThreadFactoryUtils.createNamedSingleThreadFactory("OperationDeletionService"));
   private final BlockingQueue<Object> transformTokensQueue =
       new LinkedBlockingQueue<>(TRANSFORM_TOKENS);
   private final ExecutorService transformPollerExecutor;
@@ -535,13 +537,15 @@ public class ServerInstance extends NodeInstance {
                   backplane::isStopped,
                   dispatchedOperations,
                   this::requeueOperation,
-                  dispatchedMonitorIntervalSeconds));
+                  dispatchedMonitorIntervalSeconds), "DispatchedMonitor");
     } else {
       dispatchedMonitor = null;
     }
 
     if (runOperationQueuer) {
-      transformPollerExecutor = newFixedThreadPool(TRANSFORM_TOKENS);
+      transformPollerExecutor = newFixedThreadPool(
+              TRANSFORM_TOKENS,
+              ThreadFactoryUtils.createNamedThreadFactory("TransformPollerExecutor-%d"));
 
       operationQueuer =
           new Thread(
@@ -682,7 +686,7 @@ public class ServerInstance extends NodeInstance {
                     log.log(Level.SEVERE, "interrupted while stopping instance " + getName(), e);
                   }
                 }
-              });
+              }, "OperationQueuer");
     } else {
       operationQueuer = null;
       transformPollerExecutor = null;
@@ -709,7 +713,7 @@ public class ServerInstance extends NodeInstance {
                 }
               }
             },
-            "Prometheus Metrics Collector");
+            "PrometheusMetricsCollector");
   }
 
   private void updateQueueSizes(List<QueueStatus> queues) {

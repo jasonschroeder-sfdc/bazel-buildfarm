@@ -27,6 +27,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static java.util.logging.Level.INFO;
 import static java.util.logging.Level.SEVERE;
 
+import build.buildfarm.common.ThreadFactoryUtils;
 import build.bazel.remote.execution.v2.Compressor;
 import build.buildfarm.backplane.Backplane;
 import build.buildfarm.cas.ContentAddressableStorage;
@@ -626,7 +627,7 @@ public final class Worker extends LoggingMain {
                 }
               }
             },
-            "Worker.failsafeRegistration")
+            "Worker-FailsafeRegistration")
         .start();
   }
 
@@ -668,7 +669,9 @@ public final class Worker extends LoggingMain {
     }
 
     ExecutorService removeDirectoryService = BuildfarmExecutors.getRemoveDirectoryPool();
-    ExecutorService accessRecorder = newSingleThreadExecutor();
+    ExecutorService accessRecorder =
+        newSingleThreadExecutor(
+            ThreadFactoryUtils.createNamedSingleThreadFactory("Worker-AccessRecorder"));
     ExecutorService fetchService = BuildfarmExecutors.getFetchServicePool();
     FixedBufferPool zstdBufferPool =
         new FixedBufferPool(configs.getWorker().getZstdBufferPoolSize());
