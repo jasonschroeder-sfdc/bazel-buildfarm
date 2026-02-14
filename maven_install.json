@@ -70,6 +70,7 @@
     "io.netty:netty-transport-native-epoll": 31622471,
     "io.netty:netty-transport-native-kqueue": 2130594529,
     "io.netty:netty-transport-native-unix-common": 291180147,
+    "io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations": -1749273813,
     "io.opentelemetry:opentelemetry-api": 237530819,
     "io.opentelemetry:opentelemetry-bom": 596348298,
     "io.opentelemetry:opentelemetry-context": -543978024,
@@ -213,6 +214,7 @@
     "io.netty:netty-transport-native-unix-common": -1512965411,
     "io.opencensus:opencensus-api": -1701840334,
     "io.opencensus:opencensus-contrib-http-util": 945061793,
+    "io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations": -2005816516,
     "io.opentelemetry:opentelemetry-api": 1610145289,
     "io.opentelemetry:opentelemetry-common": 1536918223,
     "io.opentelemetry:opentelemetry-context": -2053317130,
@@ -926,6 +928,12 @@
         "jar": "3ea995b55a4068be22989b70cc29a4d788c2d328d1d50613a7a9afd13fdd2d0a"
       },
       "version": "0.31.1"
+    },
+    "io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations": {
+      "shasums": {
+        "jar": "993cae4855df58d32f4da00362e1c754f0920dff1de98863a3047189ebb1e37a"
+      },
+      "version": "2.20.1"
     },
     "io.opentelemetry:opentelemetry-api": {
       "shasums": {
@@ -1934,6 +1942,9 @@
     "io.opencensus:opencensus-contrib-http-util": [
       "com.google.guava:guava",
       "io.opencensus:opencensus-api"
+    ],
+    "io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations": [
+      "io.opentelemetry:opentelemetry-api"
     ],
     "io.opentelemetry:opentelemetry-api": [
       "io.opentelemetry:opentelemetry-context"
@@ -3208,6 +3219,9 @@
     "io.opencensus:opencensus-contrib-http-util": [
       "io.opencensus.contrib.http",
       "io.opencensus.contrib.http.util"
+    ],
+    "io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations": [
+      "io.opentelemetry.instrumentation.annotations"
     ],
     "io.opentelemetry:opentelemetry-api": [
       "io.opentelemetry.api",
@@ -4661,6 +4675,7 @@
       "io.netty:netty-transport-native-unix-common",
       "io.opencensus:opencensus-api",
       "io.opencensus:opencensus-contrib-http-util",
+      "io.opentelemetry.instrumentation:opentelemetry-instrumentation-annotations",
       "io.opentelemetry:opentelemetry-api",
       "io.opentelemetry:opentelemetry-common",
       "io.opentelemetry:opentelemetry-context",
