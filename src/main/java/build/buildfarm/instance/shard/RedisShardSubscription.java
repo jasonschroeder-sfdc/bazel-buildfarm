@@ -20,6 +20,7 @@ import build.buildfarm.common.function.InterruptingRunnable;
 import build.buildfarm.common.redis.RedisClient;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Status;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -99,6 +100,7 @@ class RedisShardSubscription implements Runnable {
     }
   }
 
+  @WithSpan
   private void subscribe(UnifiedJedis jedis, boolean isReset) {
     if (isReset) {
       onReset.accept(jedis);
@@ -123,6 +125,7 @@ class RedisShardSubscription implements Runnable {
     }
   }
 
+  @WithSpan
   private void iterate(boolean isReset) throws IOException {
     try {
       client.run(jedis -> subscribe(jedis, isReset));
