@@ -3,9 +3,10 @@ buildfarm definitions and configurations around choosing JVM flags for java imag
 """
 
 SERVER_TELEMETRY_JVM_FLAGS = [
-    "-javaagent:/app/build_buildfarm/opentelemetry-javaagent.jar",
+    "-javaagent:/Users/jschroeder/Downloads/opentelemetry-javaagent.jar",
     "-Dotel.resource.attributes=service.name=server",
-    "-Dotel.exporter.otlp.traces.endpoint=http://otel-collector:4317",
+    #     "-Dotel.exporter.otlp.traces.endpoint=http://localhost:4318",
+    #     "-Dotel.traces.exporter=otlp/protobuf",
     "-Dotel.instrumentation.http.capture-headers.client.request",
     "-Dotel.instrumentation.http.capture-headers.client.response",
     "-Dotel.instrumentation.http.capture-headers.server.request",
@@ -13,9 +14,9 @@ SERVER_TELEMETRY_JVM_FLAGS = [
 ]
 
 WORKER_TELEMETRY_JVM_FLAGS = [
-    "-javaagent:/app/build_buildfarm/opentelemetry-javaagent.jar",
+    "-javaagent:/Users/jschroeder/Downloads/opentelemetry-javaagent.jar",
     "-Dotel.resource.attributes=service.name=worker",
-    "-Dotel.exporter.otlp.traces.endpoint=http://otel-collector:4317",
+    #"-Dotel.exporter.otlp.traces.endpoint=http://localhost:4317",
     "-Dotel.instrumentation.http.capture-headers.client.request",
     "-Dotel.instrumentation.http.capture-headers.client.response",
     "-Dotel.instrumentation.http.capture-headers.server.request",
@@ -26,7 +27,7 @@ RECOMMENDED_JVM_FLAGS = [
     # Enables the JVM to detect if it is running inside a container and automatically adjusts
     # its behavior to optimize performance. This flag can help ensure that the JVM is
     # configured optimally for containerized environments.
-    "-XX:+UseContainerSupport",
+    #"-XX:+UseContainerSupport",
 
     # By default, the JVM sets the maximum heap size to 25% of the available memory.
     # It’s quite conservative.  Let's give the heap more space:

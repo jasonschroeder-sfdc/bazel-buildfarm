@@ -1,5 +1,5 @@
 load("@rules_java//java:java_binary.bzl", "java_binary")
-load("//:jvm_flags.bzl", "add_opens_sun_nio_fs", "ensure_accurate_metadata")
+load("//:jvm_flags.bzl", "server_jvm_flags", "worker_jvm_flags")
 
 package(
     default_visibility = ["//src:__subpackages__"],
@@ -18,7 +18,7 @@ java_binary(
         "//examples:example_configs",
         "//examples:example_properties",
     ],
-    jvm_flags = ensure_accurate_metadata() + add_opens_sun_nio_fs(),
+    jvm_flags = server_jvm_flags(),
     main_class = "build.buildfarm.server.BuildFarmServer",
     visibility = ["//visibility:public"],
     runtime_deps = [
@@ -32,7 +32,7 @@ java_binary(
         "//examples:example_configs",
         "//examples:example_properties",
     ],
-    jvm_flags = ensure_accurate_metadata() + add_opens_sun_nio_fs(),
+    jvm_flags = worker_jvm_flags(),
     main_class = "build.buildfarm.worker.shard.Worker",
     visibility = ["//visibility:public"],
     runtime_deps = [
