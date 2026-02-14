@@ -21,6 +21,8 @@ import static redis.clients.jedis.params.ScanParams.SCAN_POINTER_START;
 import build.buildfarm.common.Queue;
 import build.buildfarm.common.Visitor;
 import com.google.common.collect.ImmutableList;
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.time.Duration;
 import java.util.List;
 import java.util.function.Supplier;
@@ -135,7 +137,8 @@ public class RedisQueue implements Queue<String> {
    * @note Suggested return identifier: val.
    */
   @Override
-  public String take(Duration timeout) {
+  @WithSpan
+  public String take(@SpanAttribute Duration timeout) {
     return jedis.blmove(name, getDequeueName(), RIGHT, LEFT, toRedisTimeoutSeconds(timeout));
   }
 
@@ -147,6 +150,7 @@ public class RedisQueue implements Queue<String> {
    * @note Suggested return identifier: val.
    */
   @Override
+  @WithSpan
   public String poll() {
     return jedis.lmove(name, getDequeueName(), RIGHT, LEFT);
   }
@@ -202,7 +206,8 @@ public class RedisQueue implements Queue<String> {
    * @param visitor A visitor for each visited element in the queue.
    * @note Overloaded.
    */
-  private void visit(String queueName, Visitor<String> visitor) {
+  @WithSpan
+  private void visit(@SpanAttribute String queueName, Visitor<String> visitor) {
     int index = 0;
     int nextIndex = listPageSize;
     List<String> entries;

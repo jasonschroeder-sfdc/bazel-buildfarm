@@ -19,6 +19,8 @@ import static com.google.common.collect.Lists.newArrayList;
 import static com.google.common.collect.Maps.transformValues;
 
 import com.google.common.collect.Iterables;
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +74,7 @@ public class RedisHashMap<T> {
    * @return Whether a new key was inserted. If a key is overwritten with a new value, this would be
    *     false.
    */
+  @WithSpan
   public boolean insert(UnifiedJedis jedis, String key, T value) {
     return jedis.hset(name, key, translator.print(value)) == 1;
   }
@@ -84,11 +87,14 @@ public class RedisHashMap<T> {
    * @param value The value for the key.
    * @return Whether a new key was inserted. If a key already exists, this would be false.
    */
-  public boolean insertIfMissing(UnifiedJedis jedis, String key, T value) {
+  @WithSpan
+  public boolean insertIfMissing(UnifiedJedis jedis, @SpanAttribute String key, T value) {
     return jedis.hsetnx(name, key, translator.print(value)) == 1;
   }
 
-  public Response<Long> insertIfMissing(AbstractPipeline jedis, String key, T value) {
+  @WithSpan
+  public Response<Long> insertIfMissing(
+      AbstractPipeline jedis, @SpanAttribute String key, T value) {
     return jedis.hsetnx(name, key, translator.print(value));
   }
 
@@ -99,6 +105,7 @@ public class RedisHashMap<T> {
    * @param key The name of the key.
    * @return Whether the key exists or not in the map.
    */
+  @WithSpan
   public boolean exists(UnifiedJedis jedis, String key) {
     return jedis.hexists(name, key);
   }
@@ -110,6 +117,7 @@ public class RedisHashMap<T> {
    * @param key The name of the key.
    * @return Whether the key was removed.
    */
+  @WithSpan
   public boolean remove(UnifiedJedis jedis, String key) {
     return jedis.hdel(name, key) == 1;
   }
@@ -138,6 +146,7 @@ public class RedisHashMap<T> {
     return jedis.hlen(name);
   }
 
+  @WithSpan
   public Response<Long> size(AbstractPipeline pipeline) {
     return pipeline.hlen(name);
   }
@@ -148,10 +157,12 @@ public class RedisHashMap<T> {
    * @param jedis Jedis cluster client.
    * @return The redis hashmap keys represented as a set.
    */
+  @WithSpan
   public Set<String> keys(UnifiedJedis jedis) {
     return jedis.hkeys(name);
   }
 
+  @WithSpan
   public ScanResult<Map.Entry<String, T>> scan(UnifiedJedis jedis, String hashCursor, int count) {
     // unlike full map search, we should have good scan key coherency
     // avoid switching this around while trying to pad out the results
@@ -178,6 +189,7 @@ public class RedisHashMap<T> {
    * @param jedis Jedis cluster client.
    * @return The redis hashmap represented as a java map.
    */
+  @WithSpan
   public Map<String, T> asMap(UnifiedJedis jedis) {
     return transformValues(jedis.hgetAll(name), translator::parse);
   }
@@ -188,6 +200,7 @@ public class RedisHashMap<T> {
    * @param fields The name of the fields.
    * @return Values associated with the specified fields
    */
+  @WithSpan
   public Iterable<T> mget(UnifiedJedis jedis, Iterable<String> fields) {
     return transform(jedis.hmget(name, Iterables.toArray(fields, String.class)), translator::parse);
   }
