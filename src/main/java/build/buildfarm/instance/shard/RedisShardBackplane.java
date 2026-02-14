@@ -75,6 +75,7 @@ import com.google.protobuf.util.Timestamps;
 import com.google.rpc.Code;
 import com.google.rpc.Status;
 import io.grpc.Deadline;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.AbstractMap;
@@ -177,6 +178,7 @@ public class RedisShardBackplane implements Backplane {
     this.onUnsubscribe = onUnsubscribe;
   }
 
+  @WithSpan
   private void scanProcessing(UnifiedJedis jedis, Consumer<String> onOperationName, Instant now) {
     state.prequeue.visitDequeue(
         jedis,
@@ -210,6 +212,7 @@ public class RedisShardBackplane implements Backplane {
         });
   }
 
+  @WithSpan
   private void scanDispatching(UnifiedJedis jedis, Consumer<String> onOperationName, Instant now) {
     state.executionQueue.visitDequeue(
         jedis,
@@ -973,6 +976,7 @@ public class RedisShardBackplane implements Backplane {
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public void queue(QueueEntry queueEntry, Operation operation) throws IOException {
     String executionName = operation.getName();
     Operation publishOperation = onPublish.apply(operation);
@@ -1021,6 +1025,7 @@ public class RedisShardBackplane implements Backplane {
   }
 
   @Override
+  @WithSpan
   public ScanResult<DispatchedOperation> scanDispatchedOperations(String cursor, int count)
       throws IOException {
     ImmutableList.Builder<DispatchedOperation> builder = new ImmutableList.Builder<>();
@@ -1097,6 +1102,7 @@ public class RedisShardBackplane implements Backplane {
     return client.blockingCall(this::deprequeueOperation);
   }
 
+  @WithSpan
   private @Nullable QueueEntry dispatchOperation(
       UnifiedJedis jedis, List<Platform.Property> provisions, LocalResourceSet resourceSet)
       throws InterruptedException {
@@ -1305,6 +1311,7 @@ public class RedisShardBackplane implements Backplane {
     return client.call(jedis -> isBlocklisted(jedis, requestMetadata));
   }
 
+  @WithSpan
   private boolean isBlocklisted(UnifiedJedis jedis, RequestMetadata requestMetadata) {
     boolean isActionBlocked =
         (!requestMetadata.getActionId().isEmpty()
@@ -1329,6 +1336,7 @@ public class RedisShardBackplane implements Backplane {
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public BackplaneStatus backplaneStatus() throws IOException {
     return client.call(this::backplaneStatus);
   }
