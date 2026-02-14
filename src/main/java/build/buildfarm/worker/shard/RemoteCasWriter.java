@@ -35,6 +35,10 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.protobuf.ByteString;
 import io.grpc.Status;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -62,7 +66,9 @@ public class RemoteCasWriter implements CasWriter {
   }
 
   @Override
-  public void write(Digest digest, Path file) throws IOException, InterruptedException {
+  @WithSpan
+  public void write(@SpanAttribute Digest digest, Path file)
+      throws IOException, InterruptedException {
     if (digest.getSize() > 0) {
       insertFileToCasMember(digest, file);
     }
@@ -73,6 +79,7 @@ public class RemoteCasWriter implements CasWriter {
     try (InputStream in = Files.newInputStream(file)) {
       retrier.execute(() -> writeToCasMember(digest, in));
     } catch (RetryException e) {
+      Span.current().setStatus(StatusCode.ERROR).recordException(e);
       Throwable cause = e.getCause();
       Throwables.throwIfInstanceOf(cause, IOException.class);
       Throwables.throwIfUnchecked(cause);
@@ -106,11 +113,14 @@ public class RemoteCasWriter implements CasWriter {
   }
 
   @Override
-  public void insertBlob(Digest digest, ByteString content)
+  @WithSpan
+  public void insertBlob(@SpanAttribute Digest digest, ByteString content)
       throws IOException, InterruptedException {
     try (InputStream in = content.newInput()) {
       retrier.execute(() -> writeToCasMember(digest, in));
     } catch (RetryException e) {
+      Span.current().setStatus(StatusCode.ERROR).recordException(e);
+
       Throwable cause = e.getCause();
       Throwables.throwIfInstanceOf(cause, IOException.class);
       Throwables.throwIfUnchecked(cause);

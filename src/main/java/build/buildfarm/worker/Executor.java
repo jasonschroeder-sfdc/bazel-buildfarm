@@ -59,6 +59,8 @@ import com.google.protobuf.util.Durations;
 import com.google.protobuf.util.Timestamps;
 import com.google.rpc.Code;
 import io.grpc.Deadline;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -99,6 +101,7 @@ class Executor {
   }
 
   // ensure that only one error put attempt occurs
+  @WithSpan
   private void putError() throws InterruptedException {
     if (!wasErrored) {
       wasErrored = true;
@@ -106,6 +109,7 @@ class Executor {
     }
   }
 
+  @WithSpan
   private boolean putOperation(boolean ignoreFailure) throws InterruptedException {
     Operation operation =
         executionContext.operation.toBuilder()
@@ -373,6 +377,7 @@ class Executor {
             .setMessage("command resources were referenced after execution completed");
       }
     } catch (IOException e) {
+      Span.current().setStatus(StatusCode.ERROR).recordException(e);
       log.log(Level.SEVERE, format("error executing operation %s", operationName), e);
       executionContext.poller.pause();
       putError();

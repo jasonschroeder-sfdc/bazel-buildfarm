@@ -356,6 +356,7 @@ public class RedisShardBackplane implements Backplane {
     publishReset(message -> pipeline.publish(channel, message), operation);
   }
 
+  @WithSpan
   void publishReset(UnifiedJedis jedis, Operation operation) {
     String channel = executionChannel(operation.getName());
     publishReset(message -> jedis.publish(channel, message), operation);
@@ -1074,6 +1075,7 @@ public class RedisShardBackplane implements Backplane {
     return dequeueService;
   }
 
+  @WithSpan
   private ExecuteEntry deprequeueOperation(UnifiedJedis jedis) throws InterruptedException {
     BalancedQueueEntry<ExecuteEntry> balancedQueueEntry =
         state.prequeue.take(jedis, getDequeueService());
@@ -1101,6 +1103,7 @@ public class RedisShardBackplane implements Backplane {
 
   @SuppressWarnings("ConstantConditions")
   @Override
+  @WithSpan
   public ExecuteEntry deprequeueOperation() throws IOException, InterruptedException {
     return client.blockingCall(this::deprequeueOperation);
   }

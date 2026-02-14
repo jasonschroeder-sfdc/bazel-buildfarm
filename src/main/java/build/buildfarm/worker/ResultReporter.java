@@ -39,6 +39,8 @@ import io.grpc.Deadline;
 import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
 import io.grpc.protobuf.StatusProto;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import java.io.IOException;
 import java.nio.channels.ClosedByInterruptException;
@@ -83,6 +85,7 @@ class ResultReporter implements Runnable {
         Thread.currentThread().interrupt();
       }
     } catch (Exception e) {
+      Span.current().setStatus(StatusCode.ERROR).recordException(e);
       log.log(Level.WARNING, format("error while reporting results: %s", executionName), e);
       try {
         owner.error().put(executionContext);
@@ -247,6 +250,7 @@ class ResultReporter implements Runnable {
     return stopwatch.elapsed(MICROSECONDS) - reportUSecs;
   }
 
+  @WithSpan
   private void proceedToOutput(Operation completedExecution) throws InterruptedException {
     ExecutionContext completedExecutionContext =
         executionContext.toBuilder().setOperation(completedExecution).build();
@@ -267,6 +271,7 @@ class ResultReporter implements Runnable {
     }
   }
 
+  @WithSpan
   protected void after(ExecutionContext executionContext) {
     try {
       workerContext.destroyExecDir(executionContext.execDir);

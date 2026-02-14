@@ -90,6 +90,7 @@ public class InputFetcher implements Runnable {
     this.pollerExecutor = pollerExecutor;
   }
 
+  @WithSpan
   private List<String> validateQueuedOperation(QueuedOperation queuedOperation) {
     // Capture a list of all validation failures on the queued operation.
     // A successful validation is a an empty list of failures.
@@ -194,6 +195,7 @@ public class InputFetcher implements Runnable {
     return null;
   }
 
+  @WithSpan
   private void putOperation() throws InterruptedException {
     Operation operation =
         executionContext.operation.toBuilder()

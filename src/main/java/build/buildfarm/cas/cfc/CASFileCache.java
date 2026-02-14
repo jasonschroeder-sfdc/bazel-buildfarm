@@ -93,6 +93,8 @@ import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.netty.handler.codec.http.QueryStringDecoder;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.instrumentation.annotations.SpanAttribute;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import io.prometheus.client.Counter;
@@ -799,6 +801,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
 
   // TODO stop ignoring onExpiration
   @Override
+  @WithSpan
   public void put(Blob blob, Runnable onExpiration) throws InterruptedException {
     Digest digest = blob.getDigest();
     String key = getKey(digest, false);
@@ -830,6 +833,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
         }
       }
     } catch (IOException e) {
+      Span.current().setStatus(StatusCode.ERROR).recordException(e);
       log.log(Level.SEVERE, "error putting " + DigestUtil.toString(digest), e);
     }
   }
@@ -2100,7 +2104,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
 
   @VisibleForTesting
   @WithSpan
-  public PathResult put(Digest digest, boolean isExecutable)
+  public PathResult put(@SpanAttribute Digest digest, boolean isExecutable)
       throws IOException, InterruptedException {
     checkState(digest.getSize() > 0, "file entries may not be empty");
 
@@ -2158,6 +2162,7 @@ public abstract class CASFileCache implements ContentAddressableStorage {
             Throwables.propagateIfInstanceOf(e.getCause(), InterruptedException.class);
             throw new InterruptedException();
           } else {
+            Span.current().recordException(e).setStatus(StatusCode.ERROR);
             log.log(
                 Level.FINER,
                 format("failed output stream close for %s", DigestUtil.toString(digest)),
