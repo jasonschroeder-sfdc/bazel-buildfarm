@@ -16,19 +16,20 @@ public class FastCDCChunker implements Iterator<Blob> {
   private static final Long[] GEAR = generateGear();
   private static final Long[] GEAR_LS = generateGearLS();
 
-  private static final int avgSize = 1 << 19; // 512 * 1024
+  private static final int DEFAULT_AVERAGE_SIZE = 1 << 19; // 512 * 1024
   // above is power of 2, important for our fast check
   //
   // The minimum and maximum chunk sizes MUST be derived from the average:
   //   - min_chunk_size = avg_chunk_size_bytes / 4
   //   - max_chunk_size = avg_chunk_size_bytes * 4
-  private static final int minSize = avgSize / 4;
-  private static final int maxSize = avgSize * 4;
+  private final int averageSize;
+  private final int minSize;
+  private final int maxSize;
   // masking relies on pow2
-  private static final long maskStrict = ((avgSize - 1) << 1) | 1;
-  private static final long maskLoose = (avgSize - 1) >> 1;
-  private static final long maskStrictLS = maskStrict << 1;
-  private static final long maskLooseLS = maskStrict << 1;
+  private final long maskStrict;
+  private final long maskLoose;
+  private final long maskStrictLS;
+  private final long maskLooseLS;
 
   private final DigestUtil digestUtil;
   private final InputStream in;
@@ -45,7 +46,7 @@ public class FastCDCChunker implements Iterator<Blob> {
   //
   // We'll take SHOULD a bit more seriously here...
   public static int minBlobSize() {
-    return maxSize;
+    return DEFAULT_AVERAGE_SIZE * 4;
   }
 
   private static Long[] generateGear() {
@@ -57,8 +58,19 @@ public class FastCDCChunker implements Iterator<Blob> {
   }
 
   public FastCDCChunker(DigestUtil digestUtil, InputStream in) {
+    this(digestUtil, in, DEFAULT_AVERAGE_SIZE);
+  }
+
+  FastCDCChunker(DigestUtil digestUtil, InputStream in, int averageSize) {
     this.digestUtil = digestUtil;
     this.in = in;
+    this.averageSize = averageSize;
+    minSize = averageSize / 4;
+    maxSize = averageSize * 4;
+    maskStrict = ((averageSize - 1) << 1) | 1;
+    maskLoose = (averageSize - 1) >> 1;
+    maskStrictLS = maskStrict << 1;
+    maskLooseLS = maskStrict << 1;
   }
 
   @Override
@@ -92,7 +104,7 @@ public class FastCDCChunker implements Iterator<Blob> {
 
   private int findChunkBoundary() {
     int size = chunk.size();
-    int avgLimit = Math.min(size, avgSize);
+    int avgLimit = Math.min(size, averageSize);
     int maxLimit = Math.min(size, maxSize);
     long hash = 0;
     int position = minSize;
