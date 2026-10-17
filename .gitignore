@@ -21,3 +21,10 @@ unused_deps
 buildozer
 google-java-format
 lcov
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*
