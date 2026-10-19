@@ -533,7 +533,8 @@ public class StubInstance extends InstanceBase {
     FetchBlobRequest.Builder request =
         FetchBlobRequest.newBuilder().addAllUris(uris).setDigestFunction(digestFunction);
     if (!originDigest.getHash().isEmpty()) {
-      request.addQualifiersBuilder()
+      request
+          .addQualifiersBuilder()
           .setName("checksum.sri")
           .setValue(
               originDigest.getDigestFunction().name().toLowerCase()
@@ -551,8 +552,7 @@ public class StubInstance extends InstanceBase {
             throw StatusProto.toStatusRuntimeException(response.getStatus());
           }
           // other responses, uris, expirations, etc
-          return DigestUtil.fromDigest(
-              response.getBlobDigest(), digestFunction);
+          return DigestUtil.fromDigest(response.getBlobDigest(), digestFunction);
         },
         directExecutor());
   }
