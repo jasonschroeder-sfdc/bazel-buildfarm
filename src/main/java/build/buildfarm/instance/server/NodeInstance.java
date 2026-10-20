@@ -104,7 +104,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
-import com.google.common.hash.Hasher;
+import com.google.common.hash.HashingOutputStream;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.FutureCallback;
@@ -755,26 +755,17 @@ public abstract class NodeInstance extends InstanceBase {
 
     Path downloaded = Files.createTempFile("buildfarm-fetch-", ".blob");
     try {
-      Hasher originHasher = originDigestUtil.newHasher();
-      Hasher casHasher = casDigestUtil.newHasher();
-      long size = 0;
+      HashingOutputStream casOut =
+          casDigestUtil.newHashingOutputStream(Files.newOutputStream(downloaded));
+      HashingOutputStream originOut = originDigestUtil.newHashingOutputStream(casOut);
+      long size;
       try (InputStream in = connection.getInputStream();
-          OutputStream out = Files.newOutputStream(downloaded)) {
-        byte[] buffer = new byte[8192];
-        for (int count; (count = in.read(buffer)) != -1; ) {
-          originHasher.putBytes(buffer, 0, count);
-          casHasher.putBytes(buffer, 0, count);
-          out.write(buffer, 0, count);
-          size += count;
-        }
+          OutputStream out = originOut) {
+        size = ByteStreams.copy(in, originOut);
       }
-      Digest actualOriginDigest = originDigestUtil.build(originHasher.hash().toString(), size);
-      if (!originDigest.getHash().isEmpty()
-          && (!originDigest.getHash().equals(actualOriginDigest.getHash())
-              || (originDigest.getSize() >= 0 && originDigest.getSize() != size))) {
-        throw new DigestMismatchException(actualOriginDigest, originDigest);
-      }
-      Digest digest = casDigestUtil.build(casHasher.hash().toString(), size);
+      Digest actualOriginDigest = originDigestUtil.build(originOut.hash().toString(), size);
+      checkOriginDigest(originDigest, actualOriginDigest);
+      Digest digest = casDigestUtil.build(casOut.hash().toString(), size);
       Write write = getContentWrite.create(digest);
       try (InputStream in = Files.newInputStream(downloaded);
           OutputStream out = write.getOutput(1, DAYS, () -> {})) {
@@ -788,12 +779,22 @@ public abstract class NodeInstance extends InstanceBase {
     }
   }
 
+  private static void checkOriginDigest(Digest originDigest, Digest actualOriginDigest)
+      throws DigestMismatchException {
+    if (!originDigest.getHash().isEmpty()
+        && (!originDigest.getHash().equals(actualOriginDigest.getHash())
+            || (originDigest.getSize() >= 0
+                && originDigest.getSize() != actualOriginDigest.getSize()))) {
+      throw new DigestMismatchException(actualOriginDigest, originDigest);
+    }
+  }
+
   @Override
   public ListenableFuture<Digest> fetchBlob(
       Iterable<String> uris,
       Map<String, String> headers,
       Digest originDigest,
-      DigestFunction.Value digestFunction,
+      Digest casDigest,
       RequestMetadata requestMetadata) {
     ImmutableList.Builder<URL> urls = ImmutableList.builder();
     for (String uri : uris) {
@@ -803,7 +804,7 @@ public abstract class NodeInstance extends InstanceBase {
         return immediateFailedFuture(e);
       }
     }
-    return fetchBlobUrls(urls.build(), headers, originDigest, digestFunction, requestMetadata);
+    return fetchBlobUrls(urls.build(), headers, originDigest, casDigest, requestMetadata);
   }
 
   private static final String INDEXED_HEADER_REGEX = "^\\d+:.*$";
@@ -861,7 +862,7 @@ public abstract class NodeInstance extends InstanceBase {
       Iterable<URL> urls,
       Map<String, String> headers,
       Digest originDigest,
-      DigestFunction.Value digestFunction,
+      Digest casDigest,
       RequestMetadata requestMetadata) {
     // First pass: collect global headers
     // These apply to all URLs.
@@ -880,9 +881,9 @@ public abstract class NodeInstance extends InstanceBase {
             new DigestUtil(
                 HashFunction.get(
                     originDigest.getDigestFunction() == DigestFunction.Value.UNKNOWN
-                        ? digestFunction
+                        ? casDigest.getDigestFunction()
                         : originDigest.getDigestFunction())),
-            new DigestUtil(HashFunction.get(digestFunction)),
+            new DigestUtil(HashFunction.get(casDigest.getDigestFunction())),
             actualDigest ->
                 getBlobWrite(
                     Compressor.Value.IDENTITY, actualDigest, UUID.randomUUID(), requestMetadata));
