@@ -32,7 +32,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import redis.clients.jedis.Jedis;
-import redis.clients.jedis.JedisPooled;
 import redis.clients.jedis.UnifiedJedis;
 
 /**
@@ -49,7 +48,7 @@ public class LeaderElectionTest {
   private static final Duration SHORT_RENEWAL = Duration.ofMillis(500);
 
   private BuildfarmConfigs configs = BuildfarmConfigs.getInstance();
-  private JedisPooled pooled;
+  private Pooled pooled;
   private Jedis redis;
   private UnifiedJedis unified;
   private List<LeaderElection> electionsToClose = new ArrayList<>();
@@ -58,8 +57,8 @@ public class LeaderElectionTest {
   public void setUp() throws Exception {
     configs.getBackplane().setRedisUri("redis://localhost:6379");
     unified = JedisClusterFactory.createTest();
-    assertThat(unified).isInstanceOf(JedisPooled.class);
-    pooled = (JedisPooled) unified;
+    assertThat(unified).isInstanceOf(Pooled.class);
+    pooled = (Pooled) unified;
     redis = new Jedis(pooled.getPool().getResource());
     redis.flushDB();
   }
